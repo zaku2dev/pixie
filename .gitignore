@@ -20,8 +20,8 @@ __pycache__
 # **output
 # **.so
 # checkpoints_*/
-# checkpoints_continuous_mse/
-# checkpoints_discrete/
+checkpoints_continuous_mse/
+checkpoints_discrete/
 # **wandb
 # **.glb
 # **cache**
@@ -44,3 +44,6 @@ backup_data
 real_scene_data/
 real_scene_models/
 outputs/
+real_scene_render_outputs/
+mpm_sim_outputs/
+inference_combined_mse_clip_results/

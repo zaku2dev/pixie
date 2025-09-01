@@ -143,7 +143,7 @@ def get_latest_checkpoint_dirs(seg_base_dir: str, cont_base_dir: str):
     cont_timestamps = [d for d in os.listdir(cont_base_dir) if os.path.isdir(os.path.join(cont_base_dir, d))]
     
     if not seg_timestamps or not cont_timestamps:
-        raise ValueError("No timestamp directories found in checkpoint folders")
+        raise ValueError(f"No timestamp directories found in checkpoint folders {seg_base_dir} or/and {cont_base_dir}")
     
     # Get latest timestamp directories
     latest_seg_ts = sorted(seg_timestamps)[-1]  # Most recent timestamp
