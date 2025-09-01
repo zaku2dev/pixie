@@ -1,0 +1,19 @@
+obj_id: bonsai
+obj_path: null
+voxelization:
+  grid_size: 64
+  voxel_size: 0.0078125
+  gray_threshold: 0.05
+  scene_bounds:
+    x_bound:
+    - -0.25
+    - 0.25
+    y_bound:
+    - -0.2
+    - 0.3
+    z_bound:
+    - -0.7
+    - -0.2
+  batch_size: 4096
+  alpha_weighted: true
+  alpha_threshold_for_mask: 0.01
