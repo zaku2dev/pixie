@@ -1,0 +1,48 @@
+# Keep the build context small & fast. third_party/ is intentionally INCLUDED
+# (the vendored editable packages are installed from it).
+
+# VCS / IDE / OS cruft
+.git
+.gitignore
+.idea
+.vscode
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+
+# Secrets (inject at runtime instead)
+.env
+
+# Docker files themselves (not needed inside the image)
+Dockerfile
+.dockerignore
+DOCKER.md
+docker/
+
+# Large data / model / output artifacts — download or mount these at runtime,
+# do NOT bake them into the image.
+data/
+outputs/
+render_outputs/
+real_scene_data/
+real_scene_models/
+real_scene_render_outputs/
+mpm_sim_outputs/
+inference_combined_mse_clip_results/
+vlm_seg_results/
+vlm_seg_critic_results/
+vlm_seg_mat_sample_results/
+backup_data/
+checkpoints_discrete/
+checkpoints_continuous_mse/
+**/*.tar
+**/*.tar.gz
+**/*.tar.xz
+**/*.zip
+**/*.ply
+**/*.pth
+**/*.npy
+
+# Big docs asset (teaser gif etc.)
+docs/assets/

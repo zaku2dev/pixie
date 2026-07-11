@@ -109,6 +109,18 @@ Install the [Gaussian-Splatting addon](https://github.com/ReshotAI/gaussian-spla
 
 Set the appropriate api keys and select VLM models you'd like in [config/segmentation/default.yaml](config/segmentation/default.yaml), we support OpenAI, Claude, Google's Gemini, or Qwen (local, no api needed). You can also implement more model wrappers yourself following our template!
 
+### 🐳 Docker (recommended for GPU cloud / RunPod)
+
+To avoid redoing the full install on every fresh GPU instance, a conda-based
+Docker image reproduces this entire setup (env + all CUDA-compiled extensions +
+Blender 4.3.2). Build it once on a GPU pod, push to a registry, and launch
+future pods from the image. See **[DOCKER.md](DOCKER.md)** for the full
+build/push/run walkthrough. Quick start:
+
+```bash
+IMAGE=<dockerhub-user>/pixie:latest ARCH=8.6 ./docker/build_and_push.sh
+```
+
 <h2 id="download-models">📥 Download Models and Dataset</h2>
 
 We provide pre-trained model checkpoints via HuggingFace Datasets. To download the models:
