@@ -8,7 +8,14 @@
       "Bash(command -v conda)",
       "Bash(conda env *)",
       "Bash(conda create *)",
-      "Bash(conda run *)"
+      "Bash(conda run *)",
+      "Bash(chmod +x docker/entrypoint.sh docker/build_and_push.sh)",
+      "Bash(command -v docker)",
+      "Bash(DOCKER_BUILDKIT=1 docker build --check .)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
