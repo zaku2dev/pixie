@@ -1,0 +1,158 @@
+# =============================================================================
+# Pixie — conda environment specification
+# =============================================================================
+# Create with:
+#     conda env create -f environment.yaml
+#     conda activate pixie
+#
+# IMPORTANT — this file CANNOT fully reproduce the environment on its own.
+# The pipeline depends on several components that must be installed manually
+# AFTER creating this env, because they are CUDA-compiled, GPU/CUDA-version
+# specific, pulled from git, or installed as editable local packages. Those
+# steps are listed under "MANUAL POST-INSTALL STEPS" at the bottom of this file.
+#
+# The `pip:` section below pins the pure-Python / pip-installable core deps
+# (from setup.py). Versions marked "(upstream pin)" are pinned by the project's
+# own setup.py and are known-good; the rest are pinned to known-compatible
+# releases for Python 3.10 + numpy 1.24 and may be adjusted if the resolver
+# reports a conflict.
+#
+# Platform note: the full stack targets Linux x86_64 + an NVIDIA GPU (CUDA).
+# It will not run end-to-end on macOS / CPU-only machines (tiny-cuda-nn,
+# flash-attn, diff-gaussian-rasterization, xvfb-run all require CUDA/Linux).
+#
+# CROSS-PLATFORM: this file creates the env on BOTH Linux-x86_64+CUDA (the real
+# run target) AND macOS Apple-Silicon (env creation only — Pixie is never run
+# there). Platform differences are handled with PEP 508 markers in the pip list
+# (`; sys_platform == "linux"` vs `"darwin"`), which pip honors. Only two deps
+# differ by platform: `warp-lang` and the `qwen-vl-utils[decord]` extra.
+#
+# DRY-RUN VERIFIED (2026-07-11, conda 25.11.1, Python 3.10):
+#   * conda layer (python=3.10, pip, ninja) solves on osx-arm64 and linux-64.
+#   * Linux-x86_64/cp310: full transitive tree resolves, NO version conflicts.
+#   * macOS-arm64/cp310: full transitive tree resolves with the darwin-marked
+#     substitutes (warp-lang 1.10.1, qwen-vl-utils without decord).
+#   * `params-proto` corrected 2.12.5 -> 2.12.1 (2.12.5 does not exist on PyPI).
+#   * `transformers` switched from git-main to pinned 4.49.0 (first release with
+#     Qwen2.5-VL): git main drifted to 5.x and now requires huggingface-hub>=1.5,
+#     which broke a real `conda env create`. huggingface_hub bumped 0.24.6->0.29.3
+#     and tokenizers pinned 0.21.0 to satisfy transformers 4.49's ranges.
+#   * CAVEAT — transitive torch: timm/sentence-transformers/accelerate pull the
+#     LATEST torch during env creation, which violates nerfstudio's `torch<2.2`.
+#     On Linux, run MANUAL STEP 2 (pin torch) right after creating the env so
+#     nerfstudio/f3rm install against the correct torch.
+# =============================================================================
+
+name: pixie
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - pip>=23.1                 # floor only: modern resolver + PEP 508 marker handling (not exact-pinned)
+  # Faster C++/CUDA extension builds (README recommends installing ninja first)
+  - ninja                     # left unpinned: build tool, version not correctness-sensitive
+
+  - pip:
+      # ---- Core config / IO -------------------------------------------------
+      - hydra-core==1.3.2
+      - omegaconf==2.3.0
+      - params-proto==2.12.1
+      - python-slugify==8.0.4
+      - python-dotenv==1.0.1          # setup.py lists "dotenv"; python-dotenv is the correct package
+      - colorlog==6.8.2
+
+      # ---- Numerics / geometry (numpy pin is an upstream pin) --------------
+      - numpy==1.24.4                 # (upstream pin) do not bump — many deps assume numpy<2
+      - PyMCubes==0.1.4               # (upstream pin)
+      - trimesh==4.4.3
+      - plyfile==1.0.3
+
+      # ---- Physics / simulation backends -----------------------------------
+      # warp-lang: the upstream pin (0.10.1) has NO Apple-Silicon wheel, so it is
+      # applied only on Linux (the real run target). On macOS-arm64 we install a
+      # newer warp that ships an arm64 wheel just so the env can be created
+      # (Pixie is never actually run on macOS). Markers are honored by pip.
+      - warp-lang==0.10.1 ; sys_platform == "linux"    # (upstream pin) imported as `warp`
+      - warp-lang==1.10.1 ; sys_platform == "darwin"   # macOS-only substitute (env creation, not runtime)
+      - taichi==1.5.0                 # (upstream pin) — has both linux-x86_64 and macOS-arm64 wheels
+
+      # ---- Plotting / viz ---------------------------------------------------
+      - matplotlib==3.7.5
+      - seaborn==0.13.2
+      - umap-learn==0.5.6
+
+      # ---- ML / VLM / models ------------------------------------------------
+      - timm==1.0.13                  # (upstream pin)
+      - sentence-transformers==2.7.0
+      - accelerate==0.34.2
+      # qwen-vl-utils: the [decord] video extra pulls `decord`, which has NO
+      # Apple-Silicon wheel. Keep the extra on Linux; drop it on macOS so the env
+      # still creates (video decoding is irrelevant when Pixie isn't run there).
+      - qwen-vl-utils[decord]==0.0.8 ; sys_platform == "linux"    # Qwen2.5-VL local VLM backend
+      - qwen-vl-utils==0.0.8 ; sys_platform == "darwin"           # macOS: no decord extra
+      # transformers: the README installed this from git main for Qwen2.5-VL
+      # support (https://github.com/QwenLM/Qwen2.5-VL/issues/723), but git main is
+      # a moving target and has since advanced to 5.x (requires huggingface-hub
+      # >=1.5, which conflicts with the pins here). 4.49.0 is the first RELEASE
+      # with Qwen2.5-VL, so we pin it for a reproducible, conflict-free install.
+      - transformers==4.49.0
+      - tokenizers==0.21.0            # transformers 4.49 requires >=0.21,<0.22
+
+      # ---- Data / assets / hub ---------------------------------------------
+      - objaverse==0.1.7
+      - huggingface_hub==0.29.3       # bumped into transformers 4.49 range (>=0.26,<1.0)
+
+      # ---- UI (data curation / validation Streamlit apps) ------------------
+      - streamlit==1.38.0
+
+# =============================================================================
+# MANUAL POST-INSTALL STEPS  (run inside the activated `pixie` env)
+# =============================================================================
+# These are NOT handled by this YAML. Follow README.md for full detail.
+#
+# 1. Install the Pixie package itself (editable):
+#      pip install -e .
+#    NOTE (macOS-arm64 only): setup.py hard-pins warp_lang==0.10.1 (no arm64
+#    wheel), so a plain `pip install -e .` fails on Apple Silicon. Since this
+#    YAML already installed all deps, install without re-resolving them:
+#      pip install -e . --no-deps
+#
+# 2. PyTorch + torchvision — install the build matching your CUDA version.
+#    nerfstudio requires torch>=1.13.1,<2.2 (e.g. torch 2.1.2). Example (CUDA 12.1):
+#      pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu121
+#
+# 3. tiny-cuda-nn (CUDA-compiled; needed by f3rm feature field):
+#      pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+#
+# 4. Vendored third-party packages (editable local installs):
+#      pip install -e third_party/nerfstudio
+#      pip install -e third_party/f3rm
+#      pip install -e third_party/vlmx
+#
+# 5. PyTorch3D + pinned viewer/CLI deps (nerfstudio-compatible):
+#      pip install -v "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+#      pip install viser==0.2.7
+#      pip install tyro==0.6.6
+#
+# 6. PhysGaussian CUDA submodules (MPM simulation):
+#      pip install -v -e third_party/PhysGaussian/gaussian-splatting/submodules/simple-knn/
+#      pip install -v -e third_party/PhysGaussian/gaussian-splatting/submodules/diff-gaussian-rasterization/
+#    (If the -e build fails, retry without -e.)
+#
+# 7. FlashAttention (for Qwen2.5-VL; CUDA-compiled, slow build):
+#      MAX_JOBS=16 pip install -v -U flash-attn --no-build-isolation
+#
+# 8. Blender 4.3.2 (separate binary, not a Python package):
+#      - Download Blender 4.3.2:            https://www.blender.org/download/
+#      - Install BlenderNeRF add-on and Gaussian-Splatting Blender add-on;
+#        set paths.blender_nerf_addon_path / paths.blender_gs_addon_path in config/paths/default.yaml
+#      - Install objaverse into Blender's bundled python, e.g.:
+#          <blender>/4.3/python/bin/python3.11 -m pip install objaverse
+#
+# 9. Known fixes (see README "Common Issues"):
+#      - UnicodeEncodeError:  pip install --force-reinstall warp_lang==0.10.1
+#      - numpy dtype binary incompat:  pip install --force-reinstall numpy==1.24.4
+# =============================================================================
