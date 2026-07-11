@@ -65,7 +65,9 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
     && conda config --set always_yes true \
     && conda clean -afy
 
-WORKDIR /workspace/pixie
+# Code lives OUTSIDE /workspace on purpose: RunPod mounts its persistent volume
+# at /workspace by default, which would otherwise shadow the baked-in code.
+WORKDIR /opt/pixie
 
 # ---- Conda environment ------------------------------------------------------
 # Copy only environment.yaml first so this expensive layer is cached and only

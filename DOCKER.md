@@ -1,12 +1,13 @@
-# Pixie in Docker (RunPod GPU workflow)
+# Deploying Pixie on RunPod (step by step)
 
 This bakes the entire README.md install (conda env + all CUDA-compiled
-extensions + Blender 4.3.2) into a single image, so a new GPU instance is ready
-to run Pixie without redoing the setup by hand.
+extensions + Blender 4.3.2) into a single Docker image, so a fresh GPU instance
+runs Pixie without redoing the setup by hand. Build the image **once**, push it
+to a registry, and every future RunPod pod pulls the finished image in seconds.
 
 **What is / isn't in the image**
 
-| In the image | Not in the image (mount / download at runtime) |
+| In the image | Not in the image (download / mount at runtime) |
 |---|---|
 | conda `pixie` env (`environment.yaml`) | Model checkpoints (`scripts/download_models.py`) |
 | torch 2.1.2 / cu121 | PixieVerse dataset (`scripts/download_data.py`) |
@@ -14,87 +15,164 @@ to run Pixie without redoing the setup by hand.
 | nerfstudio, f3rm, vlmx, PhysGaussian submodules | Your generated outputs |
 | Blender 4.3.2 + BlenderNeRF/GS add-ons | |
 
-Models and data are large and change independently of the code, so keep them on
-a mounted volume rather than rebuilding the image for every dataset refresh.
+Code lives at **`/opt/pixie`** inside the image. Large, code-independent models
+and data live on a **persistent volume mounted at `/workspace`**, and
+`paths.base_path=/workspace` points Pixie at them. (Code is deliberately kept
+out of `/workspace` so RunPod's volume doesn't shadow it.)
 
 ---
 
-## 1. Prerequisites
+## Step 0 — Prerequisites
 
-- A Docker Hub (or other registry) account for storing the built image.
-- A RunPod account with credits.
+- A **Docker Hub** account (or any registry) to host the image — note your
+  username; the image will be `<user>/pixie:<tag>`.
+- A **RunPod** account with credits.
+- (Optional) VLM **API keys** (OpenAI / Anthropic / Gemini) — only needed for
+  `material_mode=vlm` labeling. The neural physics-estimation MVP needs none.
 
-## 2. Build the image on a GPU pod
+---
+
+## Step 1 — Build and push the image
 
 `docker build` compiles tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
-rasterizer from source — slow on a laptop, fast on a GPU pod. Build there once,
-push to a registry, and every future pod pulls the finished image in seconds.
+rasterizer from source — this needs a machine with a **Docker daemon**, but
+**not a GPU** (the CUDA arch is baked in via a build arg, not detected). Two
+ways to get that machine:
 
-1. **Launch a build pod** on RunPod. Pick a template that provides a Docker
-   daemon (RunPod's *"RunPod Pytorch"* pods run in containers without one; use a
-   host that gives you Docker access — e.g. a RunPod pod based on a
-   `docker:dind` template, or any cloud VM with an NVIDIA GPU + Docker + the
-   NVIDIA Container Toolkit). Any Ampere-or-newer GPU works.
+**Option A — any host with Docker (recommended, simplest).**
+Your laptop (Linux/WSL2/macOS) or a cheap CPU cloud VM. No GPU required.
 
-2. **Clone and build:**
-   ```bash
-   git clone <your-fork-url> pixie && cd pixie
+**Option B — a RunPod pod.**
+Standard RunPod pods run *inside* a container with **no Docker daemon**, so
+`docker build` fails there. You need a host that exposes Docker — a pod/template
+built for docker-in-docker, or a bare cloud VM with Docker + the NVIDIA
+Container Toolkit. If that friction isn't worth it, use Option A: the build
+never touches the GPU anyway.
 
-   # Match ARCH to the GPU you will RUN on (not necessarily the build GPU):
-   #   8.0 A100 · 8.6 A6000/A40/A10/3090 · 8.9 4090/L40 · 9.0 H100
-   IMAGE=<dockerhub-user>/pixie:latest ARCH=8.6 ./docker/build_and_push.sh
-   ```
-   The default `ARCH` (`8.0;8.6;8.9;9.0`) builds fat binaries for all common
-   RunPod cards — bigger and slower to compile, but runs anywhere. Pin a single
-   arch for a faster build if you know your target GPU.
-
-   > `docker build` cannot see the GPU, so the arch list is passed explicitly
-   > via `--build-arg` (already handled by the script). Do not rely on
-   > auto-detection.
-
-3. `build_and_push.sh` runs `docker login` implicitly via your existing
-   credentials — run `docker login` first if you haven't.
-
-## 3. Run on a fresh GPU pod
-
-Create a new RunPod pod (or `docker run`) from the pushed image. All Pixie
-inputs/outputs live under `paths.base_path` (which defaults to `null` and MUST
-be set), so mount one persistent volume and point `base_path` at it:
+On whichever host:
 
 ```bash
-docker run --gpus all -it --rm \
-  -v /workspace/pixie_store:/store \
-  -e OPENAI_API_KEY=... \
-  -e ANTHROPIC_API_KEY=... \
-  -e GEMINI_API_KEY=... \
-  <dockerhub-user>/pixie:latest
+git clone <your-fork-url> pixie && cd pixie
+docker login                       # authenticate to Docker Hub once
+
+# Pick the preset matching the GPU you will RUN on:
+# RTX 4090 / L40 (sm_89) — best value for the neural pipeline:
+IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh 4090
+#   -> pushes <dockerhub-user>/pixie:sm89-4090
+
+# A6000 / A40 / A5000 / 3090 (sm_86) — 48 GB, e.g. local Qwen VLM:
+IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh a6000
+#   -> pushes <dockerhub-user>/pixie:sm86-a6000
 ```
 
-On RunPod, set the image to `<dockerhub-user>/pixie:latest`, attach a volume at
-`/store`, and add the API keys as pod environment variables.
+| Preset | GPUs | `TORCH_CUDA_ARCH_LIST` | Image tag |
+|---|---|---|---|
+| `4090`  | RTX 4090, L40           | `8.9` | `:sm89-4090` |
+| `a6000` | A6000, A40, A5000, 3090 | `8.6` | `:sm86-a6000` |
 
-The container starts with the conda `pixie` env already activated.
-
-## 4. First-run inside the container
-
-`paths.base_path` derives `data/`, `models/`, `render_outputs/`,
-`mpm_sim_outputs/`, checkpoints, etc. Set it once (CLI or edit
-`config/paths/default.yaml`) so everything lands on the mounted `/store` volume:
+Each preset builds a single CUDA arch (fastest build, smallest image) and tags a
+distinct image, so both can live in your registry. Need another card
+(A100 `8.0`, H100 `9.0`) or one image that runs on all of them? Override the
+arch:
 
 ```bash
-# Pull model checkpoints and (optionally) the dataset onto the mounted volume:
-python scripts/download_models.py
+IMAGE=<dockerhub-user>/pixie:multi ARCH="8.0;8.6;8.9;9.0" \
+  ./docker/build_and_push.sh a6000   # preset arg required; ARCH wins
+```
+
+The build takes a while (flash-attn/tiny-cuda-nn compile from source). When it
+finishes, confirm the tag is visible in your Docker Hub repo.
+
+> **Private image?** If your Docker Hub repo is private, you'll add registry
+> credentials to the RunPod template in Step 3. Making it public is simpler for
+> a first deploy.
+
+---
+
+## Step 2 — Create a persistent volume on RunPod
+
+So models/data/outputs survive pod restarts and are reusable across pods:
+
+1. RunPod console → **Storage** → **＋ Network Volume**.
+2. Pick a **region**, give it a name (e.g. `pixie-store`), and a size
+   (**≥ 100 GB** — checkpoints + a dataset class + render outputs add up).
+3. Create it. Note the region — your pod must be deployed in the **same region**
+   to attach this volume.
+
+(Skip this only for a throwaway test; then use the pod's ephemeral volume disk
+instead and expect to re-download models each time.)
+
+---
+
+## Step 3 — Create a RunPod template
+
+A template pins the image + mount path + env vars so you can launch identical
+pods repeatedly:
+
+1. RunPod console → **Templates** → **New Template**.
+2. **Container Image:** `<dockerhub-user>/pixie:sm89-4090`
+   (or your `sm86-a6000` tag — match the GPU you'll select in Step 4).
+3. **Container Disk:** ~30–40 GB (the image itself is large).
+4. **Volume Mount Path:** `/workspace`  ← must stay `/workspace` so it matches
+   `paths.base_path=/workspace` and does **not** shadow the code at `/opt/pixie`.
+5. **Environment Variables:**
+   - VLM labeling via cloud API (skip for the neural MVP or the local-Qwen
+     path): `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`.
+   - `HF_HOME=/workspace/hf_cache` — recommended so Hugging Face model weights
+     (Qwen VLM, and download caches) land on the persistent volume instead of
+     the ephemeral container disk.
+6. **Registry Credentials:** add your Docker Hub login **only if** the image
+   repo is private.
+7. Leave the default `ENTRYPOINT`/`CMD` — the image already activates the conda
+   `pixie` env for you. Save.
+
+---
+
+## Step 4 — Deploy a pod
+
+1. RunPod console → **Pods** → **＋ Deploy** (in the **same region** as your
+   volume from Step 2).
+2. **GPU:** choose **RTX 4090** for the `sm89-4090` image (or A6000/A40 for
+   `sm86-a6000`). 24 GB is plenty for single-object neural inference.
+3. **Template:** select the template from Step 3.
+4. **Network Volume:** attach `pixie-store` (mounts at `/workspace`).
+5. Deploy. When it's **Running**, open a shell: pod → **Connect** →
+   *Start Web Terminal* (or SSH). You land in `/opt/pixie` with the `pixie`
+   conda env already active.
+
+---
+
+## Step 5 — First run inside the pod
+
+`paths.base_path=/workspace` makes Pixie read/write `data/`, `models/`,
+`render_outputs/`, `mpm_sim_outputs/`, checkpoints, etc. on the persistent
+volume. Download the models (and, if training/eval, a dataset class) there once:
+
+```bash
+# You are in /opt/pixie with the `pixie` env active.
+
+# 1. Model checkpoints -> persistent volume:
+python scripts/download_models.py --local-dir /workspace
+
+# 2. (Optional) one dataset class for quick testing:
 python scripts/download_data.py --dataset-repo vlongle/pixieverse \
-    --dirs archives --obj-class tree --local-dir /store
+    --dirs archives --obj-class tree --local-dir /workspace
 
-# Neural material prediction (no VLM key needed):
+# 3. MVP: neural physical-parameter estimation (no VLM/API key needed):
 python pipeline.py obj_id=f420ea9edb914e1b9b7adebbacecc7d8 \
-    material_mode=neural paths.base_path=/store
+    material_mode=neural paths.base_path=/workspace
+```
 
-# Blender rendering (render.py shells out to `blender`, which is on PATH).
-# Headless pods have no display, so wrap the whole command in xvfb:
+> Tip: to avoid repeating `paths.base_path=/workspace`, set `base_path:
+> /workspace` once in `config/paths/default.yaml` (edit it on the volume, or
+> bake it into your fork before building).
+
+**Blender rendering** (`render.py` shells out to `blender`, already on `PATH`).
+Headless pods have no display, so wrap it in `xvfb`:
+
+```bash
 xvfb-run -a python render.py obj_id=f420ea9edb914e1b9b7adebbacecc7d8 \
-    paths.base_path=/store \
+    paths.base_path=/workspace \
     paths.blender_nerf_addon_path=$BLENDER_NERF_ADDON_PATH \
     paths.blender_gs_addon_path=$BLENDER_GS_ADDON_PATH
 ```
@@ -107,21 +185,80 @@ GS add-on at commit `dad6545`, since neither ships a release asset):
 - `/opt/blender_addons/gaussian-splatting-blender-addon.zip` → `paths.blender_gs_addon_path`
 
 (also exported as `$BLENDER_NERF_ADDON_PATH` / `$BLENDER_GS_ADDON_PATH`.)
-Point `config/paths/default.yaml` at these, or override on the CLI (as shown in
-the `render.py` example above).
+Point `config/paths/default.yaml` at these, or override on the CLI as above.
 
 > **Custom fork caveat:** `config/paths/default.yaml` defaults to
 > `BlenderNeRF-main-custom.zip`, implying the paper used a *customized*
-> BlenderNeRF. If so, override the build arg (`--build-arg BLENDER_NERF_REF=...`)
-> or bind-mount your own zip and repoint `paths.blender_nerf_addon_path` at it.
+> BlenderNeRF. If so, rebuild with `--build-arg BLENDER_NERF_REF=...` or
+> bind-mount your own zip and repoint `paths.blender_nerf_addon_path` at it.
 
-## 5. Notes & tuning
+### Fully local (no API keys) with Qwen
+
+The VLM labeling pipeline (`material_mode=vlm`) defaults to cloud models
+(Gemini/Claude/GPT). You can run it **entirely on the pod's GPU with no API
+keys** by switching the model ids to a local Qwen2.5-VL checkpoint. The
+dispatcher (`vlmx/prompt_utils.py`) routes any model name containing `qwen` to a
+local `Qwen2_5_VLForConditionalGeneration` load — flash-attn (already in the
+image) is required and used automatically.
+
+1. Point the labeling stages at a Qwen HF repo id in
+   `config/segmentation/default.yaml` (the string is passed verbatim to
+   `from_pretrained`, so use a real id like `Qwen/Qwen2.5-VL-7B-Instruct`):
+   ```yaml
+   vlm:
+     labeling:
+       models:
+         data_filtering: "Qwen/Qwen2.5-VL-7B-Instruct"
+         segmentation:   "Qwen/Qwen2.5-VL-7B-Instruct"
+         seg_critic:     "Qwen/Qwen2.5-VL-7B-Instruct"
+         phys_sampler:   "Qwen/Qwen2.5-VL-7B-Instruct"
+         phys_judge:     "Qwen/Qwen2.5-VL-7B-Instruct"
+         parse_critic:   "Qwen/Qwen2.5-VL-7B-Instruct"
+   ```
+2. Ensure `HF_HOME=/workspace/hf_cache` (Step 3) so the multi-GB weights
+   download **once** to the persistent volume and are reused on later pods.
+3. No `*_API_KEY` env vars are needed — you can remove them from the template.
+
+```bash
+python pipeline.py obj_id=f420ea9edb914e1b9b7adebbacecc7d8 \
+    material_mode=vlm paths.base_path=/workspace
+```
+
+**GPU sizing for local Qwen:** the 7B checkpoint (bf16) fits comfortably on an
+**A6000 (48 GB)** and is tight-but-usable on a **4090 (24 GB)** given the
+long multi-view prompts; the 32B/72B variants need the A6000 or multi-GPU. If
+you plan to run local Qwen, build/deploy the **`a6000`** image. Do **not** use a
+custom model id containing the letter `o` — the dispatcher checks the GPT branch
+(`'o' in model_name`) before Qwen; standard `Qwen/Qwen2.5-VL-*` ids are safe.
+
+---
+
+## Step 6 — Stop, restart, and persistence
+
+- **Stop** the pod when idle to stop paying for the GPU. Anything on
+  `/workspace` (the network volume) persists; anything elsewhere in the
+  container (including `/opt/pixie` code edits) is lost on a fresh pod.
+- **Restart** later by deploying a new pod from the same template + volume — no
+  re-download needed; models are already on the volume.
+- **Iterating on code:** for a quick change, edit under `/opt/pixie` in a
+  running pod (editable `pip install -e` picks it up immediately) — but that
+  edit is ephemeral. For anything you want to keep, commit to your fork and
+  rebuild the image (only needed when `environment.yaml` or a compiled extension
+  changes).
+
+---
+
+## Notes & tuning
 
 - **Build OOM (flash-attn):** lower parallelism —
-  `MAX_JOBS=4 IMAGE=... ./docker/build_and_push.sh`.
+  `MAX_JOBS=4 IMAGE_REPO=... ./docker/build_and_push.sh 4090`.
 - **CUDA version:** the image targets CUDA 12.1 (torch 2.1.2/cu121). The host
   NVIDIA driver just needs to support CUDA ≥ 12.1; the toolkit is inside the
-  image.
-- **Iterating on code:** mount your working copy over `/workspace/pixie` to edit
-  without rebuilding — the editable (`pip install -e`) installs pick up changes.
-  Rebuild only when `environment.yaml` or a compiled extension changes.
+  image, so RunPod's driver is fine.
+- **Wrong-arch image won't launch:** an `sm89-4090` image runs only on Ada
+  cards. If you deploy it on an A6000 it will fail — match the pod GPU to the
+  image tag, or build the `multi` arch image.
+- **Training the UNet** (`third_party/Wavelet-Generation/trainer/...`) is the
+  heavy multi-GPU path (paper: 6× A6000). For that, deploy a multi-GPU pod with
+  the `sm86-a6000` image and scale `training.training.batch_size` to your card
+  count; the physical-parameter-estimation MVP above does **not** need it.

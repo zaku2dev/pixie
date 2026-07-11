@@ -115,10 +115,13 @@ To avoid redoing the full install on every fresh GPU instance, a conda-based
 Docker image reproduces this entire setup (env + all CUDA-compiled extensions +
 Blender 4.3.2). Build it once on a GPU pod, push to a registry, and launch
 future pods from the image. See **[DOCKER.md](DOCKER.md)** for the full
-build/push/run walkthrough. Quick start:
+build/push/run walkthrough. Quick start (pick your GPU preset):
 
 ```bash
-IMAGE=<dockerhub-user>/pixie:latest ARCH=8.6 ./docker/build_and_push.sh
+# RTX 4090 / L40 (sm_89) — best value for the neural pipeline:
+IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh 4090
+# A6000 / A40 (sm_86) — 48 GB, e.g. for the local Qwen VLM:
+IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh a6000
 ```
 
 <h2 id="download-models">📥 Download Models and Dataset</h2>
