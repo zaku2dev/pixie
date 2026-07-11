@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:arxiv.org)",
+      "Bash(python3 -c \"import json;d=json.load\\(open\\('data_curation/cat_dict.json'\\)\\);print\\(list\\(d.keys\\(\\)\\) if isinstance\\(d,dict\\) else d\\)\")",
+      "Bash(git submodule *)",
+      "Bash(python3 *)",
+      "Bash(command -v conda)",
+      "Bash(conda env *)",
+      "Bash(conda create *)",
+      "Bash(conda run *)"
+    ]
+  }
+}
