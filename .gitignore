@@ -47,3 +47,5 @@ outputs/
 real_scene_render_outputs/
 mpm_sim_outputs/
 inference_combined_mse_clip_results/
+
+.idea/
