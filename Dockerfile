@@ -4,9 +4,15 @@
 # Reproduces the full README.md + environment.yaml setup so a fresh GPU instance
 # (e.g. RunPod) can run Pixie without redoing the install by hand.
 #
-# BUILD (run this ON a GPU pod so the long CUDA compiles have a fast machine):
+# BUILD (needs a fast x86-64 host with lots of RAM; a GPU is NOT required — the
+# CUDA arch is baked in via the build args below):
+#     docker build -t <dockerhub-user>/pixie:latest .
+#
+# Defaults target the A6000 (sm_86) with MAX_JOBS=6, which fits a 64 GB box.
+# Override to build for a different card or a wider set of GPUs, e.g.:
 #     docker build \
-#       --build-arg TORCH_CUDA_ARCH_LIST="8.6" \   # optional: match your GPU
+#       --build-arg TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0" \  # run on many cards
+#       --build-arg MAX_JOBS=16 \                             # bigger box, faster
 #       -t <dockerhub-user>/pixie:latest .
 #
 # The base -devel image ships nvcc, which is required to compile
@@ -20,11 +26,14 @@ FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 # RunPod usually cannot see a GPU, so auto-detection fails — pin the arch(es)
 # explicitly. Defaults cover the common RunPod cards:
 #   8.0 A100 · 8.6 A6000/A40/A10/3090 · 8.9 4090/L40 · 9.0 H100
-# flash-attn requires sm80+, so keep the floor at 8.0. Override to a single
-# arch (e.g. "8.6") for a faster build if you only target one card type.
-ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0"
-# Parallel compile jobs for flash-attn (lower this if the build OOMs the pod).
-ARG MAX_JOBS=16
+# flash-attn requires sm80+, so keep the floor at 8.0. Defaults to a single arch
+# (8.6, A6000/A40/A10/3090) for a fast, low-memory build. Override with a wider
+# list (e.g. "8.0;8.6;8.9;9.0") if you need one image to run on other cards.
+ARG TORCH_CUDA_ARCH_LIST="8.6"
+# Parallel compile jobs for flash-attn. Its nvcc jobs use ~3-6 GB each, so peak
+# RAM is roughly MAX_JOBS x 6 GB; 6 keeps a 64 GB build box from OOMing. Raise it
+# on a bigger box for a faster build, lower it if the build still OOMs.
+ARG MAX_JOBS=6
 # Blender version (README pins 4.3.2).
 ARG BLENDER_SERIES=4.3
 ARG BLENDER_VERSION=4.3.2

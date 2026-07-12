@@ -18,9 +18,10 @@ EC2 console → **Launch instance**:
 - **AMI:** *Ubuntu Server 22.04 LTS*, architecture **64-bit (x86)** — **not**
   the Arm/Graviton variant. (RunPod GPUs are x86; the image must be x86.)
 - **Instance type:** **`m7i.4xlarge`** (16 vCPU / 64 GB RAM) — recommended; the
-  RAM headroom keeps flash-attn's parallel compile happy at `MAX_JOBS=16`.
-  Cheaper alternative: `c7i.4xlarge` (16 vCPU / 32 GB) — then pass `MAX_JOBS=8`
-  (see step 5). Tick **Spot** for ~⅓ the price on a throwaway build box.
+  default `MAX_JOBS=6` keeps flash-attn's parallel compile comfortably under
+  64 GB. Cheaper alternative: `c7i.4xlarge` (16 vCPU / 32 GB) — then pass
+  `MAX_JOBS=4` (see step 6). Tick **Spot** for ~⅓ the price on a throwaway build
+  box.
 - **Key pair:** select or create one for SSH.
 - **Network / security group:** allow inbound **SSH (TCP 22)** from *My IP*.
 - **Storage:** change the root volume to **120 GB gp3** (the image + layers +
@@ -76,10 +77,12 @@ IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh 4090    # -> :sm89-4090
 
 - The script already forces `--platform linux/amd64` (a no-op here since EC2 is
   native x86 — no emulation, unlike an Apple-Silicon Mac).
-- **32 GB instance?** Lower flash-attn parallelism to avoid an OOM:
+- The default `MAX_JOBS=6` is tuned for a 64 GB box. **On a 32 GB instance**,
+  lower it further to avoid an OOM:
   ```bash
-  MAX_JOBS=8 IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh a6000
+  MAX_JOBS=4 IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh a6000
   ```
+  On a larger box you can raise it (e.g. `MAX_JOBS=16`) for a faster build.
 - Expect **~30–60 min** (tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
   rasterizer all compile from source).
 

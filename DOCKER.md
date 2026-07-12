@@ -91,6 +91,10 @@ IMAGE=<dockerhub-user>/pixie:multi ARCH="8.0;8.6;8.9;9.0" \
   ./docker/build_and_push.sh a6000   # preset arg required; ARCH wins
 ```
 
+A multi-arch build compiles flash-attn for every listed arch, so it's much
+slower. On a box with more than 64 GB RAM, raise the compile parallelism to
+claw some of that back, e.g. prefix with `MAX_JOBS=16`.
+
 The build takes a while (flash-attn/tiny-cuda-nn compile from source). When it
 finishes, confirm the tag is visible in your Docker Hub repo.
 
@@ -261,8 +265,10 @@ custom model id containing the letter `o` — the dispatcher checks the GPT bran
 
 ## Notes & tuning
 
-- **Build OOM (flash-attn):** lower parallelism —
-  `MAX_JOBS=4 IMAGE_REPO=... ./docker/build_and_push.sh 4090`.
+- **Build OOM (flash-attn):** the default `MAX_JOBS=6` fits a 64 GB box (its
+  nvcc jobs use ~3-6 GB each). On less RAM, lower it —
+  `MAX_JOBS=4 IMAGE_REPO=... ./docker/build_and_push.sh 4090`; on a bigger box
+  raise it (e.g. `MAX_JOBS=16`) for a faster build.
 - **CUDA version:** the image targets CUDA 12.1 (torch 2.1.2/cu121). The host
   NVIDIA driver just needs to support CUDA ≥ 12.1; the toolkit is inside the
   image, so RunPod's driver is fine.

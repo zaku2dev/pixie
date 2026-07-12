@@ -18,7 +18,8 @@
 #   IMAGE        full name:tag (optional) — overrides the auto-generated tag
 #   ARCH         CUDA arch list (optional) — overrides the preset default,
 #                e.g. ARCH="8.0;8.6;8.9;9.0" for one image that runs anywhere
-#   MAX_JOBS     flash-attn parallel compile jobs (default 16; lower if OOM)
+#   MAX_JOBS     flash-attn parallel compile jobs (default 6, safe on a 64 GB
+#                box; raise on a bigger host for a faster build)
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -41,7 +42,7 @@ esac
 
 # ARCH env var (e.g. a multi-arch list) overrides the preset default.
 ARCH="${ARCH:-$ARCH_DEFAULT}"
-MAX_JOBS="${MAX_JOBS:-16}"
+MAX_JOBS="${MAX_JOBS:-6}"
 
 # Resolve the image name: explicit IMAGE wins, else IMAGE_REPO + preset tag.
 if [[ -z "${IMAGE:-}" ]]; then
