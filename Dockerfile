@@ -96,7 +96,12 @@ RUN pip install ninja \
 # torch, and the latest setuptools it pulls in dropped pkg_resources), so build
 # against the pixie env, which already has torch and a setuptools with
 # pkg_resources. Ensure the build backends are present first.
-RUN pip install "setuptools<81" wheel \
+# TCNN_CUDA_ARCHITECTURES: the build pod usually has no visible GPU, so
+# tiny-cuda-nn can't auto-detect the compute capability. It uses its own env var
+# (not TORCH_CUDA_ARCH_LIST) and wants the arch numbers WITHOUT dots (86, not
+# 8.6), so derive it from TORCH_CUDA_ARCH_LIST by stripping the dots.
+RUN export TCNN_CUDA_ARCHITECTURES="$(echo "$TORCH_CUDA_ARCH_LIST" | tr -d '.')" \
+    && pip install "setuptools<81" wheel \
     && pip install --no-build-isolation "git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
 
 # ---- MANUAL STEP 5 (git parts): PyTorch3D + pinned viewer/CLI deps ----------
