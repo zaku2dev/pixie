@@ -91,7 +91,13 @@ RUN pip install ninja \
         --index-url https://download.pytorch.org/whl/cu121
 
 # ---- MANUAL STEP 3: tiny-cuda-nn (CUDA-compiled; f3rm feature field) --------
-RUN pip install "git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
+# --no-build-isolation is required: tiny-cuda-nn's setup.py imports both `torch`
+# and `pkg_resources` at build time. An isolated build env has neither (it lacks
+# torch, and the latest setuptools it pulls in dropped pkg_resources), so build
+# against the pixie env, which already has torch and a setuptools with
+# pkg_resources. Ensure the build backends are present first.
+RUN pip install "setuptools<81" wheel \
+    && pip install --no-build-isolation "git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
 
 # ---- MANUAL STEP 5 (git parts): PyTorch3D + pinned viewer/CLI deps ----------
 RUN pip install -v "git+https://github.com/facebookresearch/pytorch3d.git@stable" \
