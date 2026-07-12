@@ -14,11 +14,12 @@
 # Secrets (inject at runtime instead)
 .env
 
-# Docker files themselves (not needed inside the image)
+# Docker files themselves (not needed inside the image).
+# NOTE: do NOT ignore docker/ — the Dockerfile COPYs docker/entrypoint.sh, and
+# an ignored path cannot be COPYd (build fails with "not found").
 Dockerfile
 .dockerignore
 DOCKER.md
-docker/
 
 # Large data / model / output artifacts — download or mount these at runtime,
 # do NOT bake them into the image.

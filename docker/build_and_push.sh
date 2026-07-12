@@ -52,8 +52,14 @@ fi
 # Run from the repo root regardless of where the script is invoked.
 cd "$(dirname "$0")/.."
 
-echo ">> Building ${IMAGE} for GPU=${GPU} (TORCH_CUDA_ARCH_LIST=${ARCH})"
+# RunPod GPUs are x86-64, so always target linux/amd64. Build on a NATIVE
+# x86-64 Linux host: on Apple Silicon this forces slow, crash-prone emulation
+# (the CUDA/conda binaries fail under Rosetta) — see DOCKER.md Step 1.
+PLATFORM="${PLATFORM:-linux/amd64}"
+
+echo ">> Building ${IMAGE} for GPU=${GPU} (platform=${PLATFORM}, TORCH_CUDA_ARCH_LIST=${ARCH})"
 docker build \
+  --platform "${PLATFORM}" \
   --build-arg TORCH_CUDA_ARCH_LIST="${ARCH}" \
   --build-arg MAX_JOBS="${MAX_JOBS}" \
   -t "${IMAGE}" \

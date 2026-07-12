@@ -36,11 +36,20 @@ out of `/workspace` so RunPod's volume doesn't shadow it.)
 
 `docker build` compiles tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
 rasterizer from source — this needs a machine with a **Docker daemon**, but
-**not a GPU** (the CUDA arch is baked in via a build arg, not detected). Two
-ways to get that machine:
+**not a GPU** (the CUDA arch is baked in via a build arg, not detected).
 
-**Option A — any host with Docker (recommended, simplest).**
-Your laptop (Linux/WSL2/macOS) or a cheap CPU cloud VM. No GPU required.
+> ⚠️ **Must be a native x86-64 (amd64) Linux host.** RunPod GPUs are x86-64, so
+> the image targets `linux/amd64` (the script passes `--platform linux/amd64`).
+> **Apple Silicon Macs cannot build it** — the amd64 CUDA/conda binaries crash
+> under Rosetta emulation (`rosetta error: ... ld-linux-x86-64.so.2`, exit 133),
+> and even if they didn't, the source compiles would take hours under emulation.
+> Intel Macs / Linux-x86_64 / WSL2-on-x86 are fine.
+
+Two ways to get a suitable host:
+
+**Option A — an x86-64 Linux box with Docker (recommended, simplest).**
+An x86-64 cloud VM (even CPU-only; ~16 vCPU / 64 GB RAM builds comfortably), an
+Intel Linux workstation, or WSL2 on an x86 PC. No GPU required.
 
 **Option B — a RunPod pod.**
 Standard RunPod pods run *inside* a container with **no Docker daemon**, so
