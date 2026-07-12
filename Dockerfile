@@ -141,8 +141,8 @@ RUN pip install -e . --no-deps \
     && pip install -e third_party/nerfstudio \
     && pip install -e third_party/f3rm \
     && pip install -e third_party/vlmx \
-    && pip install -v -e third_party/PhysGaussian/gaussian-splatting/submodules/simple-knn/ \
-    && pip install -v -e third_party/PhysGaussian/gaussian-splatting/submodules/diff-gaussian-rasterization/
+    && pip install -v --no-build-isolation -e third_party/PhysGaussian/gaussian-splatting/submodules/simple-knn/ \
+    && pip install -v --no-build-isolation -e third_party/PhysGaussian/gaussian-splatting/submodules/diff-gaussian-rasterization/
 
 # ---- MANUAL STEP 9: known-good pins (guard against transitive drift) --------
 RUN pip install --force-reinstall --no-deps numpy==1.24.4 warp_lang==0.10.1
