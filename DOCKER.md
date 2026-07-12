@@ -50,6 +50,8 @@ Two ways to get a suitable host:
 **Option A — an x86-64 Linux box with Docker (recommended, simplest).**
 An x86-64 cloud VM (even CPU-only; ~16 vCPU / 64 GB RAM builds comfortably), an
 Intel Linux workstation, or WSL2 on an x86 PC. No GPU required.
+👉 For a copy-paste AWS walkthrough, see
+[docker/build_on_ec2.md](docker/build_on_ec2.md).
 
 **Option B — a RunPod pod.**
 Standard RunPod pods run *inside* a container with **no Docker daemon**, so
