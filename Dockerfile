@@ -119,8 +119,17 @@ RUN export TCNN_CUDA_ARCHITECTURES="$(echo "$TORCH_CUDA_ARCH_LIST" | tr -d '.')"
 RUN pip install -v --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git@stable" \
     && pip install viser==0.2.7 tyro==0.6.6
 
-# ---- MANUAL STEP 7: FlashAttention (slow CUDA build; for Qwen2.5-VL) --------
-RUN pip install -v -U flash-attn --no-build-isolation
+# ---- MANUAL STEP 7: FlashAttention (for Qwen2.5-VL) -------------------------
+# Install the official prebuilt wheel instead of compiling from source. flash-attn
+# ignores TORCH_CUDA_ARCH_LIST and always builds its heavy sm_80+sm_90 backward
+# kernels, which routinely OOM-kills the compiler on a 64 GB box (and takes many
+# minutes even when it succeeds). The wheel must match the exact stack:
+#   cu122   -> runs on our cu121 runtime (CUDA is compatible within 12.x)
+#   torch2.1 / cp310 -> our torch 2.1.2 on Python 3.10
+#   cxx11abiFALSE    -> pip torch wheels use the pre-cxx11 ABI (-D_GLIBCXX_USE_CXX11_ABI=0)
+# The prebuilt sm_80/sm_90 binaries run on the A6000 (sm_86) just like a source build.
+ARG FLASH_ATTN_WHEEL="https://github.com/Dao-AILab/flash-attention/releases/download/v2.5.8/flash_attn-2.5.8+cu122torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl"
+RUN pip install "${FLASH_ATTN_WHEEL}"
 
 # ---- Copy the repo (vendored third_party packages come with it) -------------
 COPY . .
