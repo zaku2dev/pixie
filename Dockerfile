@@ -63,6 +63,10 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
     && bash /tmp/miniconda.sh -b -p /opt/conda \
     && rm /tmp/miniconda.sh \
     && conda config --set always_yes true \
+    # Recent conda builds refuse to use the default Anaconda channels until their
+    # Terms of Service are accepted; do it non-interactively so the build proceeds.
+    && conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main \
+    && conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r \
     && conda clean -afy
 
 # Code lives OUTSIDE /workspace on purpose: RunPod mounts its persistent volume
