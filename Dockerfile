@@ -105,7 +105,9 @@ RUN export TCNN_CUDA_ARCHITECTURES="$(echo "$TORCH_CUDA_ARCH_LIST" | tr -d '.')"
     && pip install --no-build-isolation "git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
 
 # ---- MANUAL STEP 5 (git parts): PyTorch3D + pinned viewer/CLI deps ----------
-RUN pip install -v "git+https://github.com/facebookresearch/pytorch3d.git@stable" \
+# --no-build-isolation: PyTorch3D imports torch in its setup.py, which an
+# isolated build env lacks — build it against the pixie env's torch instead.
+RUN pip install -v --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git@stable" \
     && pip install viser==0.2.7 tyro==0.6.6
 
 # ---- MANUAL STEP 7: FlashAttention (slow CUDA build; for Qwen2.5-VL) --------
