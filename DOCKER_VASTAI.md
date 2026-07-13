@@ -9,9 +9,11 @@ seconds.
 Vast.ai rents bare instances from a host marketplace, so **A6000 offers are
 often available when RunPod is dry** — this guide targets the `sm86-a6000`
 image. The image itself is platform-agnostic (the build in Step 1 is identical
-to the RunPod flow); only the deploy differs. The one real difference to plan
-for: Vast has **no drop-in network volume** — an instance's own disk is its
-storage (see Step 4).
+to the RunPod flow); only the deploy differs. The main thing to plan for is
+storage: on Vast you size **two separate disks** when you launch — an ephemeral
+**container disk** (holds the unpacked image) and an optional persistent **local
+volume** (holds your models/data). Both are configured in Step 2, with the
+persistence details in Step 4.
 
 > Deploying on RunPod instead? See **[DOCKER_RUNPOD.md](DOCKER_RUNPOD.md)**.
 
@@ -25,11 +27,12 @@ storage (see Step 4).
 | nerfstudio, f3rm, vlmx, PhysGaussian submodules | Your generated outputs |
 | Blender 4.3.2 + BlenderNeRF/GS add-ons | |
 
-Code lives at **`/opt/pixie`** inside the image. Large, code-independent models
-and data live under **`paths.base_path` (default `/workspace`)** — on Vast.ai
-that's just a directory on the instance's own disk (there's no separate network
-volume by default; see Step 4). Code is deliberately kept out of `/workspace` so
-a mounted volume can't shadow it.
+Code lives at **`/opt/pixie`** inside the image, on the **container disk**.
+Large, code-independent models and data live under **`paths.base_path` (default
+`/workspace`)** — mount a **local volume** there so they persist and are sized
+independently of the image (see Step 2 for the two disks, Step 4 for
+persistence). Code is deliberately kept out of `/workspace` so a mounted volume
+can't shadow it.
 
 ---
 
@@ -114,53 +117,98 @@ and env vars directly when you rent an offer. Two ways:
 
 ### Option A — web console
 1. Console → **Search** (Create/Rent).
-2. **Filter GPU:** *GPU Type = RTX A6000*, and set **Disk Space ≥ 100 GB** (the
-   image + checkpoints + a dataset class add up). Sort by $/hr or reliability.
-3. **Edit image & config** → set the image to
+2. **Filter GPU:** *GPU Type = RTX A6000*. Require enough **host disk** for both
+   parts below — set the offer filter **Disk Space ≥ ~160 GB**. Sort by $/hr or
+   reliability.
+3. **Size the two disks** (the Vast-specific part — don't conflate them):
+   - **Container disk** — the *"Disk Space to Allocate"* slider on the create
+     panel. This is the container's root filesystem, where the Docker image
+     unpacks and `/opt/pixie` lives. The pixie image is large, so give it
+     **≥ 50 GB**. It is **ephemeral** — wiped when the instance is destroyed.
+   - **Local volume** (recommended) — create/attach a **Volume** and set its
+     **Mount Path to `/workspace`**, sized **≥ 100 GB** for checkpoints + a
+     dataset class + the HF cache (Qwen 7B ≈ 16 GB) + render/sim outputs. It
+     **persists** independently of the instance. Skip it only for a throwaway
+     run — then instead bump the *container disk* to **≥ 150 GB** and expect to
+     lose everything (models included) on destroy.
+4. **Edit image & config** → set the image to
    `<dockerhub-user>/pixie:sm86-a6000`. Add your Docker Hub credentials here if
    the repo is private.
-4. **Launch Mode: SSH** (interactive shell). Vast adds its own SSH server, so it
+5. **Launch Mode: SSH** (interactive shell). Vast adds its own SSH server, so it
    bypasses the image's `ENTRYPOINT` — but the image also writes
    `conda activate pixie` into `/root/.bashrc`, so your SSH shell still lands
    with the `pixie` env active. (Pick "Docker ENTRYPOINT" mode instead and the
    image's own entrypoint runs and activates the env too.)
-5. **Env / Docker options:** in the *Docker options* field add
-   `-e HF_HOME=/workspace/hf_cache` (so Hugging Face weights land on the instance
-   disk, not the tiny default cache) plus any `*_API_KEY`s. Skip the keys for the
-   neural MVP or the local-Qwen path.
-6. **Rent** the offer. When it shows **Running**, copy the SSH command from the
+6. **Env / Docker options:** in the *Docker options* field add
+   `-e HF_HOME=/workspace/hf_cache` (so the multi-GB Hugging Face weights land on
+   the persistent `/workspace` volume, not the ephemeral container disk) plus any
+   `*_API_KEY`s. Skip the keys for the neural MVP or the local-Qwen path.
+7. **Rent** the offer. When it shows **Running**, copy the SSH command from the
    instance card and connect. You land in a shell with the `pixie` env active.
 
 ### Option B — CLI (reproducible)
 ```bash
-# Cheapest single-A6000 offer with enough disk (ID is the first column):
-vastai search offers 'gpu_name=RTX_A6000 num_gpus=1 disk_space>=100 rentable=true' -o 'dph+'
+# Cheapest single-A6000 offer with room for both disks (ID is the first column):
+vastai search offers 'gpu_name=RTX_A6000 num_gpus=1 disk_space>=160 rentable=true' -o 'dph+'
 
+# NOTE: --disk sizes the CONTAINER disk only (image + /opt/pixie); ~50 GB is plenty.
 vastai create instance <OFFER_ID> \
   --image <dockerhub-user>/pixie:sm86-a6000 \
-  --disk 120 \
+  --disk 50 \
   --ssh --direct \
   --env '-e HF_HOME=/workspace/hf_cache'    # append -e OPENAI_API_KEY=... etc. as needed
 
 vastai show instances                        # print the SSH host/port once it's running
 ```
-(Flag names vary slightly by CLI version — run `vastai create instance --help`.
-For a private image, register your Docker Hub login in your Vast account
-settings first.)
+For the persistent **`/workspace` volume**, create a Volume and attach it at
+mount path `/workspace` (e.g. `vastai create volume ...`, then attach it on the
+`create instance` call). Exact volume flags vary by CLI version — see
+`vastai create instance --help` and `vastai create volume --help`. **Without a
+volume**, everything lives on the ephemeral container disk, so raise `--disk` to
+**≥ 150 GB** and expect to lose it on destroy. For a private image, register your
+Docker Hub login in your Vast account settings first.
+
+### Launch mode: SSH vs Jupyter
+
+**SSH ("Interactive Shell server, SSH") is the recommended mode** — Pixie is
+CLI/Hydra-driven (`pipeline.py …`, `xvfb-run python render.py …`), so you drive
+it from a shell, and every shell auto-activates the `pixie` env via `.bashrc`.
+
+You **can** pick **"Jupyter-python notebook + SSH"** instead — both modes let Vast
+override the image `ENTRYPOINT` and still give you SSH, and a **Terminal** opened
+inside Jupyter is a normal shell with `pixie` active. But notebooks add two
+gotchas, because this image ships **no Jupyter and no ipykernel**:
+
+1. **No Jupyter server in the image.** Install it once from a shell:
+   ```bash
+   conda activate pixie
+   pip install jupyterlab ipykernel
+   ```
+2. **A notebook's Python *kernel* is not the `pixie` env by default.** `.bashrc`
+   activation only applies to interactive shells; a kernel inherits whatever
+   Python launched Jupyter (Vast's base Python), so `import torch` in a *cell*
+   fails even though a terminal in the same session works. Register the env as a
+   kernel, then select **"Python (pixie)"** for the notebook:
+   ```bash
+   conda activate pixie
+   python -m ipykernel install --user --name pixie --display-name "Python (pixie)"
+   ```
+   (Your `-e HF_HOME=…` / `*_API_KEY` env vars are container-level, so they *do*
+   reach the kernel — only the conda env needs this fix.)
 
 ---
 
 ## Step 3 — First run inside the instance
 
 `paths.base_path=/workspace` makes Pixie read/write `data/`, `models/`,
-`render_outputs/`, `mpm_sim_outputs/`, checkpoints, etc. under `/workspace` on
-the instance disk. Download the models (and, if training/eval, a dataset class)
-there once:
+`render_outputs/`, `mpm_sim_outputs/`, checkpoints, etc. under `/workspace` (the
+local volume you mounted in Step 2). Download the models (and, if training/eval,
+a dataset class) there once:
 
 ```bash
 # You are in a shell with the `pixie` env active.
 
-# 1. Model checkpoints -> instance disk:
+# 1. Model checkpoints -> /workspace volume:
 python scripts/download_models.py --local-dir /workspace
 
 # 2. (Optional) one dataset class for quick testing:
@@ -247,22 +295,32 @@ containing the letter `o` — the dispatcher checks the GPT branch
 
 ## Step 4 — Storage, stop, and persistence
 
-Vast.ai has **no shared network volume** by default: the instance disk you sized
-in Step 2 *is* the storage (it's the container filesystem). Practically:
+On Vast.ai you manage the **two disks** you sized in Step 2, and they persist
+very differently:
 
-- `/workspace` is just a directory on that disk, so every command above uses it
-  unchanged.
-- Data on the disk **persists while the instance exists**, including across
-  **stops** (you keep paying a small storage fee while stopped). **Destroying**
-  the instance deletes it.
+- **Container disk** (the *"Disk Space to Allocate"* amount) — the container root
+  filesystem: the unpacked image and the `/opt/pixie` code. **Ephemeral** — it is
+  wiped when the instance is **destroyed**, and any code edits under `/opt/pixie`
+  go with it.
+- **Local volume at `/workspace`** — where `paths.base_path` and `HF_HOME` point,
+  so checkpoints, dataset, HF cache and outputs live here. It **persists**
+  independently of the instance and can be reattached. Note a *local* volume is
+  pinned to the host machine it was created on, so to reuse it you rent again on
+  that same machine. This is why `download_models.py --local-dir /workspace` only
+  needs to run once.
+
+Practically:
+- **Stop** an instance when idle to stop paying for the GPU. You keep paying a
+  small storage fee for the container disk + volume while stopped, and the data
+  survives a stop. **Destroying** the instance frees the container disk; the
+  local volume survives as long as you keep it.
 - **Iterating on code:** edit under `/opt/pixie` on a running instance (editable
-  `pip install -e` picks it up immediately). That edit lives only on that
-  instance — commit anything you want to keep to your fork and rebuild the image
-  (only needed when `environment.yaml` or a compiled extension changes).
-- **Reusing models across *different* instances:** either re-run
-  `download_models.py` on each, or attach a **Vast.ai Volume** (their newer
-  persistent-volume feature) and point `paths.base_path` at its mount path so
-  checkpoints and the HF cache survive independently of any one instance.
+  `pip install -e` picks it up immediately) — but that's on the ephemeral
+  container disk. Commit anything you want to keep to your fork and rebuild the
+  image (only needed when `environment.yaml` or a compiled extension changes).
+- **No volume?** If you skipped the volume and put everything on the container
+  disk, all of it — models included — is lost on destroy, and you'll re-run
+  `download_models.py` on each new instance.
 
 > **Match the image arch to the offer:** the `sm86-a6000` image runs only on
 > A6000/A40/A5000/3090. If you can only find a **4090/L40** offer, launch your

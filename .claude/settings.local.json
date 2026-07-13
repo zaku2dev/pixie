@@ -19,7 +19,8 @@
       "Bash(awk '{print $1}')",
       "Bash(awk '$1==160000{print $2}')",
       "Bash(git rm *)",
-      "Bash(sort -t: -k2)"
+      "Bash(sort -t: -k2)",
+      "Bash(cd *)"
     ]
   }
 }
