@@ -149,8 +149,9 @@ RUN pip install --force-reinstall --no-deps numpy==1.24.4 warp_lang==0.10.1
 
 # ---- MANUAL STEP 8: Blender 4.3.2 + add-ons ---------------------------------
 # Blender is a standalone binary, not a Python package. Add-ons are downloaded
-# as zips; set paths.blender_nerf_addon_path / paths.blender_gs_addon_path in
-# config/paths/default.yaml to point at them (see ENV_BLENDER_* below).
+# as zips; the BLENDER_*_ADDON_PATH env vars set below point config/paths/
+# default.yaml at them automatically via its ${oc.env:...} defaults — no manual
+# config edit needed.
 RUN wget -q "https://download.blender.org/release/Blender${BLENDER_SERIES}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" -O /tmp/blender.tar.xz \
     && mkdir -p /opt/blender \
     && tar -xf /tmp/blender.tar.xz -C /opt/blender --strip-components=1 \
