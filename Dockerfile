@@ -171,7 +171,11 @@ ENV BLENDER_NERF_ADDON_PATH=/opt/blender_addons/BlenderNeRF.zip \
 # Reset SHELL and use an entrypoint that activates the conda env for any command
 # (interactive shell, `python pipeline.py ...`, etc.).
 SHELL ["/bin/bash", "-c"]
-RUN echo "conda activate pixie" >> /root/.bashrc
+# Source conda's shell hook BEFORE activating so interactive shells that only run
+# ~/.bashrc (e.g. Vast.ai SSH, which bypasses the ENTRYPOINT) get a working
+# `conda activate`. Without the source line, `conda activate` errors with
+# "Run 'conda init' before 'conda activate'".
+RUN printf '%s\n' 'source /opt/conda/etc/profile.d/conda.sh' 'conda activate pixie' >> /root/.bashrc
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

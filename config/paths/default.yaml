@@ -1,7 +1,7 @@
 # Base paths
 # null -> use current directory
 # project_root: null ## for current directory like config
-base_path: null ## for everything else. On the cluster, we store data and model on a different mnt
+base_path: "/workspace" ## for everything else. On the cluster, we store data and model on a different mnt
 
 
 # Data directories

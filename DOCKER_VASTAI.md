@@ -200,6 +200,20 @@ gotchas, because this image ships **no Jupyter and no ipykernel**:
 
 ## Step 3 — First run inside the instance
 
+> **`CondaError: Run 'conda init' before 'conda activate'` on login?** Older
+> image tags appended `conda activate pixie` to `.bashrc` without first sourcing
+> conda's shell hook, which Vast's SSH shell needs (it bypasses the entrypoint).
+> Activate manually for this session:
+> ```bash
+> source /opt/conda/etc/profile.d/conda.sh && conda activate pixie
+> ```
+> To fix it for every future shell on this instance:
+> ```bash
+> sed -i '/^conda activate pixie/i source /opt/conda/etc/profile.d/conda.sh' /root/.bashrc
+> ```
+> Rebuilding + pushing the image (current Dockerfile) fixes it permanently, so
+> fresh instances need neither workaround.
+
 `paths.base_path=/workspace` makes Pixie read/write `data/`, `models/`,
 `render_outputs/`, `mpm_sim_outputs/`, checkpoints, etc. under `/workspace` (the
 local volume you mounted in Step 2). Download the models (and, if training/eval,
