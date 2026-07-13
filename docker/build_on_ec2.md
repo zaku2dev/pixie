@@ -90,7 +90,8 @@ IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh 4090    # -> :sm89-4090
 
 Check `https://hub.docker.com/r/zaku2dev/pixie/tags` — you should see the
 `sm86-a6000` (and/or `sm89-4090`) tag. That image is now what you point your
-RunPod template at (see [DOCKER.md](../DOCKER.md) Step 3).
+RunPod template at (see [DOCKER_RUNPOD.md](../DOCKER_RUNPOD.md) Step 3, or
+[DOCKER_VASTAI.md](../DOCKER_VASTAI.md) for Vast.ai).
 
 ## 8. Terminate the instance (stop billing)
 

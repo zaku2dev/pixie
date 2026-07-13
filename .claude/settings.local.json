@@ -17,7 +17,9 @@
       "Bash(git restore *)",
       "Bash(git commit -m ' *)",
       "Bash(awk '{print $1}')",
-      "Bash(awk '$1==160000{print $2}')"
+      "Bash(awk '$1==160000{print $2}')",
+      "Bash(git rm *)",
+      "Bash(sort -t: -k2)"
     ]
   }
 }

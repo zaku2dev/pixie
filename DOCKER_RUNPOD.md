@@ -20,6 +20,10 @@ and data live on a **persistent volume mounted at `/workspace`**, and
 `paths.base_path=/workspace` points Pixie at them. (Code is deliberately kept
 out of `/workspace` so RunPod's volume doesn't shadow it.)
 
+> **Deploying on Vast.ai instead?** The image is platform-agnostic — Step 1
+> (build) is the same everywhere. Vast.ai is handy when A6000s are scarce on
+> RunPod; see **[DOCKER_VASTAI.md](DOCKER_VASTAI.md)** for that walkthrough.
+
 ---
 
 ## Step 0 — Prerequisites
@@ -199,8 +203,10 @@ GS add-on at commit `dad6545`, since neither ships a release asset):
 - `/opt/blender_addons/BlenderNeRF.zip`  → `paths.blender_nerf_addon_path`
 - `/opt/blender_addons/gaussian-splatting-blender-addon.zip` → `paths.blender_gs_addon_path`
 
-(also exported as `$BLENDER_NERF_ADDON_PATH` / `$BLENDER_GS_ADDON_PATH`.)
-Point `config/paths/default.yaml` at these, or override on the CLI as above.
+These are exported as `$BLENDER_NERF_ADDON_PATH` / `$BLENDER_GS_ADDON_PATH`, and
+`config/paths/default.yaml` already reads those env vars by default — so the
+paths resolve automatically. Override on the CLI (as above) only if you use a
+different zip.
 
 > **Custom fork caveat:** `config/paths/default.yaml` defaults to
 > `BlenderNeRF-main-custom.zip`, implying the paper used a *customized*

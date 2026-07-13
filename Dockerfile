@@ -17,7 +17,7 @@
 #
 # The base -devel image ships nvcc, which is required to compile
 # tiny-cuda-nn, flash-attn, diff-gaussian-rasterization and PyTorch3D.
-# See DOCKER.md for the full RunPod build/push/run walkthrough.
+# See DOCKER_RUNPOD.md / DOCKER_VASTAI.md for the full build/push/run walkthroughs.
 # =============================================================================
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
