@@ -69,13 +69,22 @@ or WSL2 on an x86 PC. No GPU required.
 
 On the build host:
 
+The code is **git-cloned inside the image** (not copied), so the container is a
+live repo you can `git pull` later. That means the build needs a **GitHub token**
+with read access to the repo, passed as `GITHUB_TOKEN` — `build_and_push.sh`
+forwards it as a BuildKit secret, so it is never baked into an image layer. The
+build clones whatever is **pushed** to the branch (`PIXIE_REF`, default
+`dockerize`), so push your changes first.
+
 ```bash
 git clone <your-fork-url> pixie && cd pixie
 docker login                       # authenticate to Docker Hub once
+export GITHUB_TOKEN=ghp_xxxxxxxx   # PAT with read access to the pixie repo
 
 # A6000 / A40 / A5000 / 3090 (sm_86) — the target for this guide:
 IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh a6000
 #   -> pushes <dockerhub-user>/pixie:sm86-a6000
+#   Clone a different branch/tag:  PIXIE_REF=main IMAGE_REPO=... ./docker/build_and_push.sh a6000
 
 # RTX 4090 / L40 (sm_89) — build this too if you might rent a 4090 offer:
 IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh 4090
@@ -142,9 +151,31 @@ and env vars directly when you rent an offer. Two ways:
 6. **Env / Docker options:** in the *Docker options* field add
    `-e HF_HOME=/workspace/hf_cache` (so the multi-GB Hugging Face weights land on
    the persistent `/workspace` volume, not the ephemeral container disk) plus any
-   `*_API_KEY`s. Skip the keys for the neural MVP or the local-Qwen path.
+   `*_API_KEY`s. Skip the keys for the neural MVP or the local-Qwen path. Add
+   `-e GITHUB_TOKEN=ghp_xxx` if you want to `git pull` code updates in the
+   container (see *Syncing code changes* below).
 7. **Rent** the offer. When it shows **Running**, copy the SSH command from the
    instance card and connect. You land in a shell with the `pixie` env active.
+
+### Syncing code changes (`git pull` in the container)
+
+`/opt/pixie` is a live git clone of the repo, so you don't rebuild the image for
+every code tweak — edit on your host, push, then pull inside the container:
+
+```bash
+# on your host
+git commit -am "tweak" && git push
+
+# inside the container (GITHUB_TOKEN must be set at launch, see step 6)
+cd /opt/pixie && git pull
+```
+
+The token is supplied to git at pull time via `GIT_ASKPASS` and is **never
+stored on disk**; the remote URL carries only the `x-access-token` username. If
+you edited an installed package under `third_party/`, they're `pip install -e`
+(editable), so a pull is picked up without reinstalling. No `GITHUB_TOKEN`? The
+repo is public-clone-only if you made it public; otherwise the pull will fail
+auth — set the token.
 
 ### Option B — CLI (reproducible)
 ```bash

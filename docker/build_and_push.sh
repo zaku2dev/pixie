@@ -20,8 +20,17 @@
 #                e.g. ARCH="8.0;8.6;8.9;9.0" for one image that runs anywhere
 #   MAX_JOBS     flash-attn parallel compile jobs (default 6, safe on a 64 GB
 #                box; raise on a bigger host for a faster build)
+#   GITHUB_TOKEN GitHub PAT with read access to the (private) pixie repo. The
+#                build clones the code over HTTPS using this token, passed as a
+#                BuildKit secret so it is never baked into an image layer.
+#   PIXIE_REF    branch/tag to clone (default: the Dockerfile's PIXIE_REF).
 # -----------------------------------------------------------------------------
 set -euo pipefail
+
+# The code is git-cloned inside the image from a private repo, so a token is
+# required at build time. BuildKit is required to consume the --secret mount.
+: "${GITHUB_TOKEN:?Set GITHUB_TOKEN=<github PAT with repo read access> (used to clone the private repo at build time)}"
+export DOCKER_BUILDKIT=1
 
 GPU="${1:-${GPU:-}}"
 
@@ -61,6 +70,8 @@ PLATFORM="${PLATFORM:-linux/amd64}"
 echo ">> Building ${IMAGE} for GPU=${GPU} (platform=${PLATFORM}, TORCH_CUDA_ARCH_LIST=${ARCH})"
 docker build \
   --platform "${PLATFORM}" \
+  --secret id=github_token,env=GITHUB_TOKEN \
+  ${PIXIE_REF:+--build-arg PIXIE_REF="${PIXIE_REF}"} \
   --build-arg TORCH_CUDA_ARCH_LIST="${ARCH}" \
   --build-arg MAX_JOBS="${MAX_JOBS}" \
   -t "${IMAGE}" \

@@ -21,7 +21,12 @@
       "Bash(git rm *)",
       "Bash(sort -t: -k2)",
       "Bash(cd *)",
-      "Bash(python -m py_compile pixie/blender/generate_blendernerf_data.py)"
+      "Bash(python -m py_compile pixie/blender/generate_blendernerf_data.py)",
+      "Bash(python -m py_compile scripts/download_models.py)",
+      "Bash(git -C . rev-parse --is-inside-work-tree)",
+      "Bash(bash -n docker/build_and_push.sh)",
+      "Bash(sh -n docker/git-askpass.sh)",
+      "Bash(git -C /Users/zaku2dev/Projects/pixie status --short .claude/)"
     ]
   }
 }

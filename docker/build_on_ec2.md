@@ -20,7 +20,7 @@ EC2 console → **Launch instance**:
 - **Instance type:** **`m7i.4xlarge`** (16 vCPU / 64 GB RAM) — recommended; the
   default `MAX_JOBS=6` keeps flash-attn's parallel compile comfortably under
   64 GB. Cheaper alternative: `c7i.4xlarge` (16 vCPU / 32 GB) — then pass
-  `MAX_JOBS=4` (see step 6). Tick **Spot** for ~⅓ the price on a throwaway build
+  `MAX_JOBS=4` (see step 7). Tick **Spot** for ~⅓ the price on a throwaway build
   box.
 - **Key pair:** select or create one for SSH.
 - **Network / security group:** allow inbound **SSH (TCP 22)** from *My IP*.
@@ -57,7 +57,28 @@ No `--recurse-submodules` needed — `third_party/` (including the PhysGaussian
 `simple-knn` / `diff-gaussian-rasterization` CUDA sources) is vendored as
 regular tracked files.
 
-## 5. Log in to Docker Hub
+## 5. Provide the GitHub token for the in-image clone
+
+The image **git-clones the code inside the build** (so the container is a live
+repo you can `git pull` later), and the repo is private — so the build needs a
+GitHub token. `build_and_push.sh` reads it from `GITHUB_TOKEN` and forwards it as
+a BuildKit **secret**, so it is never written into an image layer.
+
+Create a **fine-grained PAT** scoped to just this repo — **Contents: read-only**,
+short expiration — at github.com/settings/tokens. Then, on the EC2 box, read it
+into the environment **without** putting it in shell history or the EBS volume:
+
+```bash
+read -rsp 'GitHub token: ' GITHUB_TOKEN; export GITHUB_TOKEN; echo
+```
+
+- Typed via `read -s`, the token stays only in the shell's memory — not in
+  `~/.bash_history`, not on disk — and is gone when you terminate the instance.
+- Do **not** `export GITHUB_TOKEN=ghp_...` inline (it lands in history and `ps`),
+  and do **not** pass it via EC2 user-data (readable by anything on the box via
+  IMDS).
+
+## 6. Log in to Docker Hub
 
 Create an access token first: hub.docker.com → **Account Settings → Security →
 New Access Token** (read/write). Then:
@@ -67,7 +88,7 @@ docker login -u zaku2dev
 # paste the ACCESS TOKEN as the password (not your account password)
 ```
 
-## 6. Build and push
+## 7. Build and push
 
 ```bash
 IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh a6000   # -> :sm86-a6000
@@ -86,14 +107,14 @@ IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh 4090    # -> :sm89-4090
 - Expect **~30–60 min** (tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
   rasterizer all compile from source).
 
-## 7. Verify the push
+## 8. Verify the push
 
 Check `https://hub.docker.com/r/zaku2dev/pixie/tags` — you should see the
 `sm86-a6000` (and/or `sm89-4090`) tag. That image is now what you point your
 RunPod template at (see [DOCKER_RUNPOD.md](../DOCKER_RUNPOD.md) Step 3, or
 [DOCKER_VASTAI.md](../DOCKER_VASTAI.md) for Vast.ai).
 
-## 8. Terminate the instance (stop billing)
+## 9. Terminate the instance (stop billing)
 
 EC2 console → **Instances** → select → **Instance state → Terminate**. The
 root EBS volume is set to *delete on termination* by default; confirm it's gone

@@ -84,9 +84,11 @@ WORKDIR /opt/pixie
 
 # ---- Conda environment ------------------------------------------------------
 # Copy only environment.yaml first so this expensive layer is cached and only
-# rebuilds when the env spec changes.
-COPY environment.yaml ./
-RUN conda env create -f environment.yaml && conda clean -afy
+# rebuilds when the env spec changes. Land it in /tmp (NOT /opt/pixie) so the
+# WORKDIR stays empty for the `git clone` below — cloning into a non-empty dir
+# fails.
+COPY environment.yaml /tmp/environment.yaml
+RUN conda env create -f /tmp/environment.yaml && conda clean -afy
 
 # From here on, every RUN executes inside the activated `pixie` env.
 SHELL ["conda", "run", "--no-capture-output", "-n", "pixie", "/bin/bash", "-c"]
@@ -131,8 +133,32 @@ RUN pip install -v --no-build-isolation "git+https://github.com/facebookresearch
 ARG FLASH_ATTN_WHEEL="https://github.com/Dao-AILab/flash-attention/releases/download/v2.5.8/flash_attn-2.5.8+cu122torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl"
 RUN pip install "${FLASH_ATTN_WHEEL}"
 
-# ---- Copy the repo (vendored third_party packages come with it) -------------
-COPY . .
+# ---- Clone the repo (vendored third_party packages come with it) ------------
+# Cloned instead of COPYd so the container is a LIVE git repo: commit + push
+# from your host, then `git pull` inside the container to sync. Note this uses
+# whatever is PUSHED to ${PIXIE_REF} — local uncommitted changes are NOT baked
+# in (push them first).
+#
+# The repo is private, so the build authenticates with a GitHub token passed as
+# a BuildKit secret (never written to a layer). After cloning, the stored remote
+# is reset to a token-less URL — the token never lands in the image. The token
+# for runtime `git pull` is supplied separately via GIT_ASKPASS (see below).
+#
+# Build with (build_and_push.sh does this for you):
+#   DOCKER_BUILDKIT=1 GITHUB_TOKEN=ghp_xxx \
+#     docker build --secret id=github_token,env=GITHUB_TOKEN ...
+#
+# Docker caches this layer, so a rebuild will NOT re-clone a newer commit unless
+# the cache is busted: bump --build-arg PIXIE_REF=... or pass --no-cache. Day to
+# day you don't rebuild — you `git pull` inside the running container instead.
+ARG PIXIE_REPO=github.com/zaku2dev/pixie.git
+ARG PIXIE_REF=dockerize
+RUN --mount=type=secret,id=github_token \
+    token="$(cat /run/secrets/github_token)" \
+    && git clone --branch "${PIXIE_REF}" \
+         "https://x-access-token:${token}@${PIXIE_REPO}" /opt/pixie \
+    && git -C /opt/pixie remote set-url origin "https://x-access-token@${PIXIE_REPO}" \
+    && git config --global --add safe.directory /opt/pixie
 
 # ---- MANUAL STEP 1 + 4 + 6: editable local installs -------------------------
 # `-e . --no-deps`: environment.yaml already installed pixie's deps; --no-deps
@@ -175,18 +201,25 @@ SHELL ["/bin/bash", "-c"]
 # ~/.bashrc (e.g. Vast.ai SSH, which bypasses the ENTRYPOINT) get a working
 # `conda activate`. Without the source line, `conda activate` errors with
 # "Run 'conda init' before 'conda activate'".
-# Also re-export the Blender add-on paths here: Vast.ai's SSH login shell does
-# NOT inherit the image's Docker ENV, so without this the config's
-# ${oc.env:BLENDER_*_ADDON_PATH,...} falls back to its non-container default and
-# Blender can't find the add-on zips.
+# Also re-export the Blender add-on paths (and GIT_ASKPASS, so `git pull` finds
+# the token helper) here: Vast.ai's SSH login shell does NOT inherit the image's
+# Docker ENV, so without this the config's ${oc.env:BLENDER_*_ADDON_PATH,...}
+# falls back to its non-container default and Blender can't find the add-on zips,
+# and `git pull` can't authenticate.
 RUN printf '%s\n' \
         'source /opt/conda/etc/profile.d/conda.sh' \
         'conda activate pixie' \
         "export BLENDER_NERF_ADDON_PATH=${BLENDER_NERF_ADDON_PATH}" \
         "export BLENDER_GS_ADDON_PATH=${BLENDER_GS_ADDON_PATH}" \
+        'export GIT_ASKPASS=/usr/local/bin/git-askpass.sh' \
         >> /root/.bashrc
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# GIT_ASKPASS lets `git pull` inside the container authenticate to the private
+# repo using a GITHUB_TOKEN env var injected at launch, without ever storing the
+# token on disk. The remote URL already carries the x-access-token username.
+COPY docker/git-askpass.sh /usr/local/bin/git-askpass.sh
+ENV GIT_ASKPASS=/usr/local/bin/git-askpass.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/git-askpass.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/bin/bash"]

@@ -66,9 +66,18 @@ never touches the GPU anyway.
 
 On whichever host:
 
+The code is **git-cloned inside the image** (not copied), so the build needs a
+**GitHub token** with read access to the repo, exported as `GITHUB_TOKEN`. It is
+forwarded as a BuildKit secret and never baked into a layer. The build clones
+whatever is **pushed** to the branch (`PIXIE_REF`, default `dockerize`) — push
+first. At runtime the container is a live repo you can `git pull` (set
+`-e GITHUB_TOKEN=...` at launch; the token is fed to git via `GIT_ASKPASS`, never
+stored on disk).
+
 ```bash
 git clone <your-fork-url> pixie && cd pixie
 docker login                       # authenticate to Docker Hub once
+export GITHUB_TOKEN=ghp_xxxxxxxx   # PAT with read access to the pixie repo
 
 # Pick the preset matching the GPU you will RUN on:
 # RTX 4090 / L40 (sm_89) — best value for the neural pipeline:
