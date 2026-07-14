@@ -5,6 +5,7 @@ Download PixieVerse data from Hugging Face.
 
 import argparse
 import fnmatch
+import os
 from pathlib import Path
 
 from huggingface_hub import list_repo_files, snapshot_download
@@ -16,12 +17,22 @@ def download_data(
     force_download: bool = False,
     local_dir: str | None = None,
     obj_class: str | None = None,
+    token: str | None = None,
 ) -> None:
     project_root = Path(__file__).resolve().parent.parent
     download_path = Path(local_dir) if local_dir else project_root
     download_path.mkdir(parents=True, exist_ok=True)
 
-    repo_files = list_repo_files(repo_id=dataset_repo, repo_type="dataset")
+    # Anonymous downloads are aggressively rate-limited (HTTP 429). Authenticating
+    # with a token — even a free read token for this public repo — raises the limit.
+    token = token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not token:
+        print(
+            "Warning: no HF token found (set HF_TOKEN or pass --token). Downloading "
+            "anonymously, which HuggingFace rate-limits and may fail with HTTP 429."
+        )
+
+    repo_files = list_repo_files(repo_id=dataset_repo, repo_type="dataset", token=token)
     data_files = [f for f in repo_files if f != "README.md" and not f.startswith(".")]
     available_dirs = sorted({f.split("/")[0] for f in data_files if "/" in f})
     print(f"Available directories: {available_dirs}")
@@ -73,6 +84,7 @@ def download_data(
         allow_patterns=allow_patterns,
         ignore_patterns=["README.md", ".gitattributes"],
         force_download=force_download,
+        token=token,
     )
     if obj_class:
         print(f"Downloaded archives for class '{obj_class}' to {download_path}")
@@ -91,6 +103,7 @@ def main() -> None:
         default=None,
         help="Download only one class archive (e.g., tree). Works with --dirs archives.",
     )
+    parser.add_argument("--token", help="HuggingFace token (defaults to HF_TOKEN env var).")
     args = parser.parse_args()
 
     download_data(
@@ -99,6 +112,7 @@ def main() -> None:
         force_download=args.force,
         local_dir=args.local_dir,
         obj_class=args.obj_class,
+        token=args.token,
     )
 
 
