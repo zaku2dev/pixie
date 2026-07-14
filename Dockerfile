@@ -16,7 +16,8 @@
 #       -t <dockerhub-user>/pixie:latest .
 #
 # The base -devel image ships nvcc, which is required to compile
-# tiny-cuda-nn, flash-attn, diff-gaussian-rasterization and PyTorch3D.
+# tiny-cuda-nn, diff-gaussian-rasterization and PyTorch3D (flash-attn ships as a
+# prebuilt wheel, but its CUDA runtime still expects this -devel base).
 # See DOCKER_RUNPOD.md / DOCKER_VASTAI.md for the full build/push/run walkthroughs.
 # =============================================================================
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
@@ -30,9 +31,11 @@ FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 # (8.6, A6000/A40/A10/3090) for a fast, low-memory build. Override with a wider
 # list (e.g. "8.0;8.6;8.9;9.0") if you need one image to run on other cards.
 ARG TORCH_CUDA_ARCH_LIST="8.6"
-# Parallel compile jobs for flash-attn. Its nvcc jobs use ~3-6 GB each, so peak
-# RAM is roughly MAX_JOBS x 6 GB; 6 keeps a 64 GB build box from OOMing. Raise it
-# on a bigger box for a faster build, lower it if the build still OOMs.
+# Parallel compile jobs for the source-built CUDA extensions (tiny-cuda-nn,
+# PyTorch3D, the gaussian rasterizer, simple-knn). flash-attn — historically the
+# memory hog this knob existed for — now installs as a prebuilt wheel (STEP 7),
+# so peak RAM is far lower. 6 suits a 64 GB box; use 4 on 32 GB, 2 on 16 GB.
+# Raise it on a bigger box for a faster build, lower it if the build OOMs.
 ARG MAX_JOBS=6
 # Blender version (README pins 4.3.2).
 ARG BLENDER_SERIES=4.3
@@ -152,7 +155,7 @@ RUN pip install "${FLASH_ATTN_WHEEL}"
 # the cache is busted: bump --build-arg PIXIE_REF=... or pass --no-cache. Day to
 # day you don't rebuild — you `git pull` inside the running container instead.
 ARG PIXIE_REPO=github.com/zaku2dev/pixie.git
-ARG PIXIE_REF=dockerize
+ARG PIXIE_REF=main
 RUN --mount=type=secret,id=github_token \
     token="$(cat /run/secrets/github_token)" \
     && git clone --branch "${PIXIE_REF}" \

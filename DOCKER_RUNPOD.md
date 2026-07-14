@@ -38,9 +38,10 @@ out of `/workspace` so RunPod's volume doesn't shadow it.)
 
 ## Step 1 — Build and push the image
 
-`docker build` compiles tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
-rasterizer from source — this needs a machine with a **Docker daemon**, but
-**not a GPU** (the CUDA arch is baked in via a build arg, not detected).
+`docker build` compiles tiny-cuda-nn, PyTorch3D and the gaussian rasterizer from
+source (flash-attn installs as a prebuilt wheel) — this needs a machine with a
+**Docker daemon**, but **not a GPU** (the CUDA arch is baked in via a build arg,
+not detected).
 
 > ⚠️ **Must be a native x86-64 (amd64) Linux host.** RunPod GPUs are x86-64, so
 > the image targets `linux/amd64` (the script passes `--platform linux/amd64`).
@@ -69,7 +70,7 @@ On whichever host:
 The code is **git-cloned inside the image** (not copied), so the build needs a
 **GitHub token** with read access to the repo, exported as `GITHUB_TOKEN`. It is
 forwarded as a BuildKit secret and never baked into a layer. The build clones
-whatever is **pushed** to the branch (`PIXIE_REF`, default `dockerize`) — push
+whatever is **pushed** to the branch (`PIXIE_REF`, default `main`) — push
 first. At runtime the container is a live repo you can `git pull` (set
 `-e GITHUB_TOKEN=...` at launch; the token is fed to git via `GIT_ASKPASS`, never
 stored on disk).
@@ -104,12 +105,14 @@ IMAGE=<dockerhub-user>/pixie:multi ARCH="8.0;8.6;8.9;9.0" \
   ./docker/build_and_push.sh a6000   # preset arg required; ARCH wins
 ```
 
-A multi-arch build compiles flash-attn for every listed arch, so it's much
-slower. On a box with more than 64 GB RAM, raise the compile parallelism to
-claw some of that back, e.g. prefix with `MAX_JOBS=16`.
+A multi-arch build recompiles the source CUDA extensions (tiny-cuda-nn,
+PyTorch3D, the gaussian rasterizer) for every listed arch, so it's much slower.
+On a bigger box, raise the compile parallelism to claw some of that back, e.g.
+prefix with `MAX_JOBS=16`.
 
-The build takes a while (flash-attn/tiny-cuda-nn compile from source). When it
-finishes, confirm the tag is visible in your Docker Hub repo.
+The build takes a while (tiny-cuda-nn/PyTorch3D and the gaussian rasterizer
+compile from source; flash-attn installs as a prebuilt wheel). When it finishes,
+confirm the tag is visible in your Docker Hub repo.
 
 > **Private image?** If your Docker Hub repo is private, you'll add registry
 > credentials to the RunPod template in Step 3. Making it public is simpler for
@@ -280,8 +283,10 @@ custom model id containing the letter `o` — the dispatcher checks the GPT bran
 
 ## Notes & tuning
 
-- **Build OOM (flash-attn):** the default `MAX_JOBS=6` fits a 64 GB box (its
-  nvcc jobs use ~3-6 GB each). On less RAM, lower it —
+- **Build OOM:** `MAX_JOBS` caps parallel jobs for the source-compiled CUDA
+  extensions (flash-attn is a prebuilt wheel, so it's no longer the RAM
+  bottleneck). Default `6` fits a 64 GB box; on less RAM lower it —
+  `MAX_JOBS=4` on 32 GB, `2` on 16 GB, e.g.
   `MAX_JOBS=4 IMAGE_REPO=... ./docker/build_and_push.sh 4090`; on a bigger box
   raise it (e.g. `MAX_JOBS=16`) for a faster build.
 - **CUDA version:** the image targets CUDA 12.1 (torch 2.1.2/cu121). The host

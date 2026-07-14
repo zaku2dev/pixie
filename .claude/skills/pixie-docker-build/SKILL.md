@@ -27,8 +27,8 @@ failure** — most have already been solved and the fix is baked into the repo.
 ```bash
 export GITHUB_TOKEN=ghp_xxx                     # read-only PAT for the private repo
 IMAGE_REPO=<user>/pixie ./docker/build_and_push.sh 4090   # or a6000
-#   PIXIE_REF=main ... to clone a different branch (default: dockerize)
-#   MAX_JOBS=4 ...     lower on a 32 GB box to avoid flash-attn OOM
+#   PIXIE_REF=<branch> ... to clone a different branch/tag (default: main)
+#   MAX_JOBS=4 ...     lower on a 32 GB box (2 on 16 GB) to fit the source compiles
 #   ARCH="8.0;8.6;8.9;9.0" ... one image for many cards
 ```
 

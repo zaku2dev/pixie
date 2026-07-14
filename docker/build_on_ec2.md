@@ -7,7 +7,7 @@ up, build, push to Docker Hub, terminate.
 
 > Before you start: make sure your latest commit (the one containing
 > `Dockerfile`, `docker/`, `.dockerignore`) is **pushed** to your fork's branch
-> — EC2 will `git clone` it. From your laptop: `git push origin dockerize`.
+> — EC2 will `git clone` it. From your laptop: `git push origin main`.
 
 ---
 
@@ -17,11 +17,16 @@ EC2 console → **Launch instance**:
 
 - **AMI:** *Ubuntu Server 22.04 LTS*, architecture **64-bit (x86)** — **not**
   the Arm/Graviton variant. (RunPod GPUs are x86; the image must be x86.)
-- **Instance type:** **`m7i.4xlarge`** (16 vCPU / 64 GB RAM) — recommended; the
-  default `MAX_JOBS=6` keeps flash-attn's parallel compile comfortably under
-  64 GB. Cheaper alternative: `c7i.4xlarge` (16 vCPU / 32 GB) — then pass
-  `MAX_JOBS=4` (see step 7). Tick **Spot** for ~⅓ the price on a throwaway build
-  box.
+- **Instance type:** **`c7i.4xlarge`** (16 vCPU / 32 GB RAM) — recommended, with
+  `MAX_JOBS=4` (see step 7). flash-attn — which would otherwise be the one
+  memory-hungry compile — is installed as a **prebuilt wheel** (Dockerfile
+  STEP 7), so 64 GB is unnecessary;
+  what still compiles from source (tiny-cuda-nn, PyTorch3D, the gaussian
+  rasterizer, simple-knn) fits comfortably in 32 GB. Bigger/faster:
+  `m7i.4xlarge` (16 vCPU / 64 GB) — more headroom, raise `MAX_JOBS` for a quicker
+  build. Smaller/cheaper: `c7i.2xlarge` (8 vCPU / 16 GB) with `MAX_JOBS=2` works
+  but roughly doubles build time (fewer cores) and leaves little RAM headroom.
+  Tick **Spot** for ~⅓ the price on a throwaway build box.
 - **Key pair:** select or create one for SSH.
 - **Network / security group:** allow inbound **SSH (TCP 22)** from *My IP*.
 - **Storage:** change the root volume to **120 GB gp3** (the image + layers +
@@ -49,7 +54,7 @@ docker run --rm hello-world   # sanity check
 ## 4. Clone your fork
 
 ```bash
-git clone -b dockerize https://github.com/zaku2dev/pixie.git
+git clone -b main https://github.com/zaku2dev/pixie.git
 cd pixie
 ```
 
@@ -91,21 +96,22 @@ docker login -u zaku2dev
 ## 7. Build and push
 
 ```bash
-IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh a6000   # -> :sm86-a6000
+# On the recommended c7i.4xlarge (32 GB), cap parallelism to fit RAM:
+MAX_JOBS=4 IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh a6000   # -> :sm86-a6000
 # or, for RTX 4090 pods:
-IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh 4090    # -> :sm89-4090
+MAX_JOBS=4 IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh 4090    # -> :sm89-4090
 ```
 
 - The script already forces `--platform linux/amd64` (a no-op here since EC2 is
   native x86 — no emulation, unlike an Apple-Silicon Mac).
-- The default `MAX_JOBS=6` is tuned for a 64 GB box. **On a 32 GB instance**,
-  lower it further to avoid an OOM:
-  ```bash
-  MAX_JOBS=4 IMAGE_REPO=zaku2dev/pixie ./docker/build_and_push.sh a6000
-  ```
-  On a larger box you can raise it (e.g. `MAX_JOBS=16`) for a faster build.
-- Expect **~30–60 min** (tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
-  rasterizer all compile from source).
+- `MAX_JOBS` caps the parallel compile jobs. flash-attn — which would otherwise be
+  the memory-hungry one — installs as a **prebuilt wheel** (not compiled), so
+  `MAX_JOBS` only governs the lighter source compiles (tiny-cuda-nn, PyTorch3D,
+  gaussian rasterizer, simple-knn). Use **`4` on 32 GB**, `2` on a 16 GB box, and
+  raise it (e.g. `16`) on a 64 GB box for a faster build.
+- Expect **~30–60 min** on 16 vCPU (tiny-cuda-nn, PyTorch3D and the gaussian
+  rasterizer compile from source; flash-attn is a wheel). Fewer vCPUs scale the
+  time up roughly linearly.
 
 ## 8. Verify the push
 
@@ -124,9 +130,10 @@ so you're not billed for idle storage.
 
 ### Cost sketch
 
-`m7i.4xlarge` is ~\$0.80/hr on-demand (less on Spot). A single build run is on
-the order of **\$1**. You only pay while the instance is running, so terminate
-as soon as the push completes — the built image lives in Docker Hub, not on EC2.
+`c7i.4xlarge` is ~\$0.71/hr on-demand (less on Spot; `m7i.4xlarge` ~\$0.80/hr). A
+single build run is on the order of **\$1**. You only pay while the instance is
+running, so terminate as soon as the push completes — the built image lives in
+Docker Hub, not on EC2.
 
 ### If you need both arches
 

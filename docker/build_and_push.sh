@@ -18,8 +18,10 @@
 #   IMAGE        full name:tag (optional) — overrides the auto-generated tag
 #   ARCH         CUDA arch list (optional) — overrides the preset default,
 #                e.g. ARCH="8.0;8.6;8.9;9.0" for one image that runs anywhere
-#   MAX_JOBS     flash-attn parallel compile jobs (default 6, safe on a 64 GB
-#                box; raise on a bigger host for a faster build)
+#   MAX_JOBS     parallel jobs for the source-built CUDA extensions (tiny-cuda-nn,
+#                PyTorch3D, gaussian rasterizer, simple-knn). flash-attn installs
+#                as a prebuilt wheel, so this is no longer the RAM bottleneck it
+#                once was. Default 6 (64 GB box); use 4 on 32 GB, 2 on 16 GB.
 #   GITHUB_TOKEN GitHub PAT with read access to the (private) pixie repo. The
 #                build clones the code over HTTPS using this token, passed as a
 #                BuildKit secret so it is never baked into an image layer.

@@ -49,9 +49,10 @@ can't shadow it.
 
 ## Step 1 — Build and push the image
 
-`docker build` compiles tiny-cuda-nn, flash-attn, PyTorch3D and the gaussian
-rasterizer from source — this needs a machine with a **Docker daemon**, but
-**not a GPU** (the CUDA arch is baked in via a build arg, not detected).
+`docker build` compiles tiny-cuda-nn, PyTorch3D and the gaussian rasterizer from
+source (flash-attn installs as a prebuilt wheel) — this needs a machine with a
+**Docker daemon**, but **not a GPU** (the CUDA arch is baked in via a build arg,
+not detected).
 
 > ⚠️ **Must be a native x86-64 (amd64) Linux host.** Cloud GPU hosts (Vast.ai,
 > RunPod, …) are x86-64, so the image targets `linux/amd64` (the script passes
@@ -74,7 +75,7 @@ live repo you can `git pull` later. That means the build needs a **GitHub token*
 with read access to the repo, passed as `GITHUB_TOKEN` — `build_and_push.sh`
 forwards it as a BuildKit secret, so it is never baked into an image layer. The
 build clones whatever is **pushed** to the branch (`PIXIE_REF`, default
-`dockerize`), so push your changes first.
+`main`), so push your changes first.
 
 ```bash
 git clone <your-fork-url> pixie && cd pixie
@@ -106,12 +107,14 @@ IMAGE=<dockerhub-user>/pixie:multi ARCH="8.0;8.6;8.9;9.0" \
   ./docker/build_and_push.sh a6000   # preset arg required; ARCH wins
 ```
 
-A multi-arch build compiles flash-attn for every listed arch, so it's much
-slower. On a box with more than 64 GB RAM, raise the compile parallelism to
-claw some of that back, e.g. prefix with `MAX_JOBS=16`.
+A multi-arch build recompiles the source CUDA extensions (tiny-cuda-nn,
+PyTorch3D, the gaussian rasterizer) for every listed arch, so it's much slower.
+On a bigger box, raise the compile parallelism to claw some of that back, e.g.
+prefix with `MAX_JOBS=16`.
 
-The build takes a while (flash-attn/tiny-cuda-nn compile from source). When it
-finishes, confirm the tag is visible in your Docker Hub repo.
+The build takes a while (tiny-cuda-nn/PyTorch3D and the gaussian rasterizer
+compile from source; flash-attn installs as a prebuilt wheel). When it finishes,
+confirm the tag is visible in your Docker Hub repo.
 
 > **Private image?** If your Docker Hub repo is private, add your registry
 > credentials when you launch the instance in Step 2. Making it public is
@@ -376,8 +379,10 @@ Practically:
 
 ## Notes & tuning
 
-- **Build OOM (flash-attn):** the default `MAX_JOBS=6` fits a 64 GB build box
-  (its nvcc jobs use ~3-6 GB each). On less RAM, lower it —
+- **Build OOM:** `MAX_JOBS` caps parallel jobs for the source-compiled CUDA
+  extensions (flash-attn is a prebuilt wheel, so it's no longer the RAM
+  bottleneck). Default `6` fits a 64 GB box; on less RAM lower it —
+  `MAX_JOBS=4` on 32 GB, `2` on 16 GB, e.g.
   `MAX_JOBS=4 IMAGE_REPO=... ./docker/build_and_push.sh a6000`; on a bigger box
   raise it (e.g. `MAX_JOBS=16`) for a faster build.
 - **CUDA version:** the image targets CUDA 12.1 (torch 2.1.2/cu121). The host
