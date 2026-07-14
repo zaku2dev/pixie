@@ -63,7 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ninja-build cmake pkg-config xz-utils unzip \
         libgl1 libglu1-mesa libglib2.0-0 libsm6 libxrender1 libxext6 \
         libxi6 libxxf86vm1 libxfixes3 libxkbcommon0 libgomp1 \
-        xvfb ffmpeg \
+        xvfb ffmpeg screen \
     && git lfs install \
     && rm -rf /var/lib/apt/lists/*
 
