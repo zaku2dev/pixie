@@ -5,6 +5,7 @@ import random
 import sys
 import time
 import urllib.request
+import zipfile
 from typing import Tuple
 import bpy
 from mathutils import Vector
@@ -104,10 +105,23 @@ if args.output_dir is None:
     args.output_dir = get_default_output_dir(args.format)
     print(f"Using default output directory: {args.output_dir}")
 
-# Install the BlenderNeRF addon
-print(f"Installing BlenderNeRF addon from: {args.blender_nerf_addon_path}")
+# Install the BlenderNeRF addon.
+# Blender enables an addon by its *module* name, which is the top-level folder
+# inside the installed zip. Derive it from the zip so this works regardless of
+# the zip's filename or version tag (e.g. BlenderNeRF-6, BlenderNeRF-main-custom).
+def _addon_module_from_zip(zip_path: str) -> str:
+    with zipfile.ZipFile(zip_path) as zf:
+        top_levels = {name.split("/")[0] for name in zf.namelist() if name.strip("/")}
+    if len(top_levels) != 1:
+        raise ValueError(
+            f"Expected exactly one top-level folder in {zip_path}, found: {sorted(top_levels)}"
+        )
+    return top_levels.pop()
+
+blender_nerf_module = _addon_module_from_zip(args.blender_nerf_addon_path)
+print(f"Installing BlenderNeRF addon from: {args.blender_nerf_addon_path} (module: {blender_nerf_module})")
 bpy.ops.preferences.addon_install(filepath=args.blender_nerf_addon_path, overwrite=True)
-bpy.ops.preferences.addon_enable(module='BlenderNeRF-main-custom')
+bpy.ops.preferences.addon_enable(module=blender_nerf_module)
 
 context = bpy.context
 scene = context.scene

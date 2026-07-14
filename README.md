@@ -109,6 +109,23 @@ Install the [Gaussian-Splatting addon](https://github.com/ReshotAI/gaussian-spla
 
 Set the appropriate api keys and select VLM models you'd like in [config/segmentation/default.yaml](config/segmentation/default.yaml), we support OpenAI, Claude, Google's Gemini, or Qwen (local, no api needed). You can also implement more model wrappers yourself following our template!
 
+### 🐳 Docker (recommended for GPU cloud / RunPod / Vast.ai)
+
+To avoid redoing the full install on every fresh GPU instance, a conda-based
+Docker image reproduces this entire setup (env + all CUDA-compiled extensions +
+Blender 4.3.2). Build it once, push to a registry, and launch future instances
+from the image. For the full build/push/run walkthrough see
+**[DOCKER_RUNPOD.md](DOCKER_RUNPOD.md)** (RunPod) or
+**[DOCKER_VASTAI.md](DOCKER_VASTAI.md)** (Vast.ai — handy when A6000s are scarce
+on RunPod). Quick start (pick your GPU preset):
+
+```bash
+# RTX 4090 / L40 (sm_89) — best value for the neural pipeline:
+IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh 4090
+# A6000 / A40 (sm_86) — 48 GB, e.g. for the local Qwen VLM:
+IMAGE_REPO=<dockerhub-user>/pixie ./docker/build_and_push.sh a6000
+```
+
 <h2 id="download-models">📥 Download Models and Dataset</h2>
 
 We provide pre-trained model checkpoints via HuggingFace Datasets. To download the models:

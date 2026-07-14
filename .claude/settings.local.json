@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:arxiv.org)",
+      "Bash(python3 -c \"import json;d=json.load\\(open\\('data_curation/cat_dict.json'\\)\\);print\\(list\\(d.keys\\(\\)\\) if isinstance\\(d,dict\\) else d\\)\")",
+      "Bash(git submodule *)",
+      "Bash(python3 *)",
+      "Bash(command -v conda)",
+      "Bash(conda env *)",
+      "Bash(conda create *)",
+      "Bash(conda run *)",
+      "Bash(chmod +x docker/entrypoint.sh docker/build_and_push.sh)",
+      "Bash(command -v docker)",
+      "Bash(DOCKER_BUILDKIT=1 docker build --check .)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(git commit -m ' *)",
+      "Bash(awk '{print $1}')",
+      "Bash(awk '$1==160000{print $2}')",
+      "Bash(git rm *)",
+      "Bash(sort -t: -k2)",
+      "Bash(cd *)",
+      "Bash(python -m py_compile pixie/blender/generate_blendernerf_data.py)",
+      "Bash(python -m py_compile scripts/download_models.py)",
+      "Bash(git -C . rev-parse --is-inside-work-tree)",
+      "Bash(bash -n docker/build_and_push.sh)",
+      "Bash(sh -n docker/git-askpass.sh)",
+      "Bash(git -C /Users/zaku2dev/Projects/pixie status --short .claude/)"
+    ]
+  }
+}

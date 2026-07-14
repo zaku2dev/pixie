@@ -1,7 +1,7 @@
 # Base paths
 # null -> use current directory
 # project_root: null ## for current directory like config
-base_path: null ## for everything else. On the cluster, we store data and model on a different mnt
+base_path: "/workspace" ## for everything else. On the cluster, we store data and model on a different mnt
 
 
 # Data directories
@@ -51,8 +51,10 @@ vlm_filtering_results_dir: "${paths.base_path}/vlm_data_filtering_results"  # VL
 # Set to null for system blender or specific path for custom installation
 blender_path: "blender"
 
-blender_nerf_addon_path: "/home/vlongle/code/pixie/BlenderNeRF-main-custom.zip"
-blender_gs_addon_path: "/home/vlongle/code/pixie/blender-addon.zip"
+# Prefer the BLENDER_*_ADDON_PATH env vars when set (the Docker image points these
+# at /opt/blender_addons/*.zip); otherwise fall back to the local default paths.
+blender_nerf_addon_path: "${oc.env:BLENDER_NERF_ADDON_PATH,/home/vlongle/code/pixie/BlenderNeRF-main-custom.zip}"
+blender_gs_addon_path: "${oc.env:BLENDER_GS_ADDON_PATH,/home/vlongle/code/pixie/blender-addon.zip}"
 
 blender_output_dir: "${paths.base_path}/blender_outputs"
 
