@@ -20,7 +20,8 @@
       "Bash(awk '$1==160000{print $2}')",
       "Bash(git rm *)",
       "Bash(sort -t: -k2)",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Bash(python -m py_compile pixie/blender/generate_blendernerf_data.py)"
     ]
   }
 }

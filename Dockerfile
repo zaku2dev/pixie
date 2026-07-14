@@ -175,7 +175,16 @@ SHELL ["/bin/bash", "-c"]
 # ~/.bashrc (e.g. Vast.ai SSH, which bypasses the ENTRYPOINT) get a working
 # `conda activate`. Without the source line, `conda activate` errors with
 # "Run 'conda init' before 'conda activate'".
-RUN printf '%s\n' 'source /opt/conda/etc/profile.d/conda.sh' 'conda activate pixie' >> /root/.bashrc
+# Also re-export the Blender add-on paths here: Vast.ai's SSH login shell does
+# NOT inherit the image's Docker ENV, so without this the config's
+# ${oc.env:BLENDER_*_ADDON_PATH,...} falls back to its non-container default and
+# Blender can't find the add-on zips.
+RUN printf '%s\n' \
+        'source /opt/conda/etc/profile.d/conda.sh' \
+        'conda activate pixie' \
+        "export BLENDER_NERF_ADDON_PATH=${BLENDER_NERF_ADDON_PATH}" \
+        "export BLENDER_GS_ADDON_PATH=${BLENDER_GS_ADDON_PATH}" \
+        >> /root/.bashrc
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
