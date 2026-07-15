@@ -169,11 +169,17 @@ RUN --mount=type=secret,id=github_token \
 # ---- MANUAL STEP 1 + 4 + 6: editable local installs -------------------------
 # `-e . --no-deps`: environment.yaml already installed pixie's deps; --no-deps
 # avoids re-resolving them (and dodges the arm64-only warp pin issue).
+# simple-knn is installed NON-editable on purpose: its setup.py declares no
+# `packages=` and ships only a placeholder simple_knn/ dir (no __init__.py), so an
+# editable install registers nothing importable and `import simple_knn` fails at
+# runtime even though pip reports success. A regular install drops the compiled
+# _C.so into a real simple_knn/ package. diff-gaussian-rasterization has a proper
+# package, so -e is fine there.
 RUN pip install -e . --no-deps \
     && pip install -e third_party/nerfstudio \
     && pip install -e third_party/f3rm \
     && pip install -e third_party/vlmx \
-    && pip install -v --no-build-isolation -e third_party/PhysGaussian/gaussian-splatting/submodules/simple-knn/ \
+    && pip install -v --no-build-isolation third_party/PhysGaussian/gaussian-splatting/submodules/simple-knn/ \
     && pip install -v --no-build-isolation -e third_party/PhysGaussian/gaussian-splatting/submodules/diff-gaussian-rasterization/
 
 # ---- MANUAL STEP 9: known-good pins (guard against transitive drift) --------
