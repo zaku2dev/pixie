@@ -721,16 +721,61 @@ def _build_config_overrides(cfg: DictConfig) -> str:
     return " ".join(overrides)
 
 
+def _ensure_placeholder_material_grid(cfg: DictConfig) -> None:
+    """Write an all-background material_grid.npy for a novel object if absent.
+
+    inference_combined.py's dataset loader (MaterialVoxelDataset) is the benchmark
+    loader: it requires a ground-truth material_grid.npy per object and skips any
+    object without one. Novel objects have no GT, and VOXELIZE never writes it, so
+    the object would be dropped ("Loaded 0 data files"). The GT is only consumed
+    for accuracy metrics / the _gt.npy dump — the network predicts purely from the
+    CLIP feature grid and the clip_features_mask — so a placeholder lets inference
+    run without affecting predictions. Never overwrites a real GT.
+
+    The material_id channel is derived from the clip_features occupancy mask so that
+    the loader's enforce_mask_consistency check — which asserts
+    (material_id != background_id) == clip_features_mask — passes: foreground voxels
+    get a valid non-background id, background voxels keep background_id.
+    """
+    sample_id = cfg.training.sample_id
+    grid_size = cfg.training.default_grid_size
+    n_channels = cfg.training.in_material_channels
+    background_id = cfg.training.background_id
+    obj_dir = Path(join_path(cfg.paths.render_outputs_dir, cfg.obj_id))
+    mat_path = obj_dir / f"sample_{sample_id}" / "material_grid.npy"
+    if mat_path.exists():
+        return
+    grid = np.zeros((grid_size, grid_size, grid_size, n_channels), dtype=np.float32)
+    grid[..., -1] = background_id  # material_id channel; passes the loader's 0<=id<K check
+
+    mask_path = obj_dir / "clip_features_mask.npy"
+    if mask_path.exists():
+        mask = np.load(mask_path)
+        foreground_id = 0 if background_id != 0 else 1  # any valid id != background_id
+        grid[..., -1] = np.where(mask > 0, foreground_id, background_id).astype(np.float32)
+    else:
+        logging.warning(
+            f"[NEURAL] {mask_path} not found; placeholder material grid will be all-background "
+            "and may fail enforce_mask_consistency."
+        )
+
+    mat_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(mat_path, grid)
+    logging.info(f"[NEURAL] No GT material grid; wrote occupancy-matched placeholder to {mat_path}")
+
+
 def generate_neural_segmentation(cfg: DictConfig, render_output_dir: str,
                                  paths: dict) -> Tuple[str, str]:
     """Generates material segmentation using a pre-trained neural network."""
     sample_name = f"sample_{cfg.physics.sample_id}"
-    
+
     # Initialize paths
     sample_output_dir = paths['neural_base_dir']
     pred_path = _get_pred_path(sample_output_dir, sample_name)
     # Run inference if needed
     if not pred_path or not os.path.exists(pred_path):
+        # Novel objects have no GT material grid; the benchmark loader requires one.
+        _ensure_placeholder_material_grid(cfg)
         # Pass config overrides to inference script
         override_args = _build_config_overrides(cfg)
         inference_cmd = f"python third_party/Wavelet-Generation/trainer/inference_combined.py obj_id={cfg.obj_id} {override_args}"
