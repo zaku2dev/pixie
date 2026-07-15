@@ -5,9 +5,34 @@ Download model-related directories from a Hugging Face dataset repo.
 
 import argparse
 import os
+import shutil
 from pathlib import Path
 
 from huggingface_hub import list_repo_files, snapshot_download
+
+
+def seed_normalization_stats(project_root: Path, download_path: Path) -> None:
+    """Copy the repo's canonical normalization_stats/ into the download target.
+
+    Inference (the NEURAL_INFERENCE pipeline step) reads normalization ranges
+    from ``{base_path}/normalization_stats/normalization_ranges.yaml``. These
+    ranges must match what the pretrained model was trained with, so we seed the
+    repo's checked-in copy rather than recompute per-dataset via inspect_ranges.py
+    (which would misnormalize predictions). No-op when downloading into the repo
+    itself (source == target).
+    """
+    src = project_root / "normalization_stats"
+    dst = download_path / "normalization_stats"
+    if src.resolve() == dst.resolve():
+        return
+    if not src.is_dir():
+        print(f"Warning: {src} not found; skipping normalization_stats seeding.")
+        return
+    dst.mkdir(parents=True, exist_ok=True)
+    for item in src.iterdir():
+        if item.is_file():
+            shutil.copy2(item, dst / item.name)
+    print(f"Seeded normalization stats into: {dst}")
 
 
 def download_models(
@@ -20,6 +45,10 @@ def download_models(
     project_root = Path(__file__).resolve().parent.parent
     download_path = Path(local_dir) if local_dir else project_root
     download_path.mkdir(parents=True, exist_ok=True)
+
+    # Seed normalization stats into base_path so NEURAL_INFERENCE can find them
+    # regardless of which model dirs are downloaded.
+    seed_normalization_stats(project_root, download_path)
 
     # Anonymous downloads are aggressively rate-limited (HTTP 429). Authenticating
     # with a token — even a free read token for this public repo — raises the limit.
