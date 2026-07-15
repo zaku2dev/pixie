@@ -108,6 +108,13 @@ dependencies:
       # ---- UI (data curation / validation Streamlit apps) ------------------
       - streamlit==1.38.0
 
+      # ---- Notebooks (JupyterLab for interactive work; connect from local) --
+      # Baked into the env so `jupyter lab` runs against the pixie interpreter
+      # (its own kernel) — no separate install and no wrong-Python kernel trap.
+      - jupyterlab==4.2.5
+      - notebook==7.2.2
+      - ipykernel==6.29.5
+
 # =============================================================================
 # MANUAL POST-INSTALL STEPS  (run inside the activated `pixie` env)
 # =============================================================================

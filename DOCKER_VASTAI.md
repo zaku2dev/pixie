@@ -210,25 +210,50 @@ it from a shell, and every shell auto-activates the `pixie` env via `.bashrc`.
 
 You **can** pick **"Jupyter-python notebook + SSH"** instead — both modes let Vast
 override the image `ENTRYPOINT` and still give you SSH, and a **Terminal** opened
-inside Jupyter is a normal shell with `pixie` active. But notebooks add two
-gotchas, because this image ships **no Jupyter and no ipykernel**:
+inside Jupyter is a normal shell with `pixie` active.
 
-1. **No Jupyter server in the image.** Install it once from a shell:
-   ```bash
-   conda activate pixie
-   pip install jupyterlab ipykernel
-   ```
-2. **A notebook's Python *kernel* is not the `pixie` env by default.** `.bashrc`
-   activation only applies to interactive shells; a kernel inherits whatever
-   Python launched Jupyter (Vast's base Python), so `import torch` in a *cell*
-   fails even though a terminal in the same session works. Register the env as a
-   kernel, then select **"Python (pixie)"** for the notebook:
-   ```bash
-   conda activate pixie
-   python -m ipykernel install --user --name pixie --display-name "Python (pixie)"
-   ```
-   (Your `-e HF_HOME=…` / `*_API_KEY` env vars are container-level, so they *do*
-   reach the kernel — only the conda env needs this fix.)
+The current image **ships JupyterLab + a registered `pixie` kernel** (baked in via
+`environment.yaml`), so for a notebook opened in Vast's own Jupyter, just select the
+**"Python (pixie)"** kernel and `import torch` works — no `pip install`, no manual
+`ipykernel install`. (Your `-e HF_HOME=…` / `*_API_KEY` env vars are container-level,
+so they reach the kernel too.) To run your **own** JupyterLab (recommended, so it uses
+the pixie interpreter directly), see [Connecting JupyterLab](#connecting-jupyterlab)
+below.
+
+> Older image tags shipped no Jupyter. On those you must
+> `conda activate pixie && pip install jupyterlab ipykernel && python -m ipykernel
+> install --user --name pixie --display-name "Python (pixie)"` once — or just rebuild
+> from the current Dockerfile.
+
+---
+
+### Connecting JupyterLab
+
+The image includes a launcher, `start_jupyter.sh`, that runs JupyterLab in the `pixie`
+env bound to `0.0.0.0:8888`. From a shell **inside the instance**:
+
+```bash
+start_jupyter.sh            # prints a http://127.0.0.1:8888/lab?token=... URL
+# PORT=9999 start_jupyter.sh   # if 8888 is taken
+```
+
+Then reach it from your **local machine** one of two ways:
+
+- **SSH tunnel (works for any Vast SSH instance).** In a local terminal, forward the
+  port over the SSH command from the instance card (note Vast's non-22 SSH port):
+  ```bash
+  ssh -N -L 8888:localhost:8888 root@<ssh_host> -p <ssh_port>
+  ```
+  Leave it running, then open the `http://localhost:8888/lab?token=…` URL (copy the
+  token from the `start_jupyter.sh` output) in your local browser.
+- **Vast mapped port.** If you launched with `8888` added to the template's exposed
+  ports (`-p 8888:8888` / the ports field), `vastai show instances` lists the public
+  `host:port` mapping for 8888 — open `http://<public_host>:<mapped_port>/lab?token=…`.
+  The SSH tunnel is simpler and needs no port config, so prefer it unless you
+  specifically want a public URL.
+
+Stop the server with `Ctrl-C` in the instance shell (or run it under `tmux`/`nohup`
+so it survives disconnects).
 
 ---
 

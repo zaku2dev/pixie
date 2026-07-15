@@ -185,6 +185,14 @@ RUN pip install -e . --no-deps \
 # ---- MANUAL STEP 9: known-good pins (guard against transitive drift) --------
 RUN pip install --force-reinstall --no-deps numpy==1.24.4 warp_lang==0.10.1
 
+# ---- JupyterLab: register the pixie env as a selectable notebook kernel ------
+# jupyterlab/notebook/ipykernel come from environment.yaml. Registering the
+# kernel makes "Python (pixie)" available so a notebook cell's interpreter is the
+# same env as the CLI (torch, nerfstudio, etc.). EXPOSE documents the default
+# port for platform HTTP proxies; see docker/start_jupyter.sh + the run docs.
+RUN python -m ipykernel install --name pixie --display-name "Python (pixie)"
+EXPOSE 8888
+
 # ---- MANUAL STEP 8: Blender 4.3.2 + add-ons ---------------------------------
 # Blender is a standalone binary, not a Python package. Add-ons are downloaded
 # as zips; the BLENDER_*_ADDON_PATH env vars set below point config/paths/
@@ -231,7 +239,9 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 # token on disk. The remote URL already carries the x-access-token username.
 COPY docker/git-askpass.sh /usr/local/bin/git-askpass.sh
 ENV GIT_ASKPASS=/usr/local/bin/git-askpass.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/git-askpass.sh
+# Convenience launcher for JupyterLab (bound to 0.0.0.0:8888); see the run docs.
+COPY docker/start_jupyter.sh /usr/local/bin/start_jupyter.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/git-askpass.sh /usr/local/bin/start_jupyter.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/bin/bash"]

@@ -154,7 +154,10 @@ pods repeatedly:
      the ephemeral container disk.
 6. **Registry Credentials:** add your Docker Hub login **only if** the image
    repo is private.
-7. Leave the default `ENTRYPOINT`/`CMD` — the image already activates the conda
+7. **(Optional) Expose HTTP Ports:** add `8888` if you want to reach JupyterLab
+   through RunPod's proxy URL rather than an SSH tunnel — see
+   [Connecting JupyterLab](#connecting-jupyterlab).
+8. Leave the default `ENTRYPOINT`/`CMD` — the image already activates the conda
    `pixie` env for you. Save.
 
 ---
@@ -207,6 +210,36 @@ xvfb-run -a python render.py obj_id=f420ea9edb914e1b9b7adebbacecc7d8 \
     paths.blender_nerf_addon_path=$BLENDER_NERF_ADDON_PATH \
     paths.blender_gs_addon_path=$BLENDER_GS_ADDON_PATH
 ```
+
+### Connecting JupyterLab
+
+The image ships JupyterLab (in the `pixie` env) plus a launcher, `start_jupyter.sh`,
+that binds it to `0.0.0.0:8888` with the `pixie` interpreter as the default kernel.
+From a pod shell:
+
+```bash
+start_jupyter.sh            # prints a http://127.0.0.1:8888/lab?token=... URL
+# PORT=9999 start_jupyter.sh   # if 8888 is taken
+```
+
+Reach it from your **local machine** one of two ways:
+
+- **RunPod HTTP proxy (no local setup).** Add `8888` to the template's **Expose HTTP
+  Ports** (Step 3) before deploying. RunPod then serves the pod at
+  `https://<pod-id>-8888.proxy.runpod.net` — open that with `/lab?token=…` appended
+  (token from the launcher output). If the Lab UI fails to connect through the proxy,
+  relaunch with `jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
+  --ServerApp.allow_origin='*'`.
+- **SSH tunnel (works even without an exposed HTTP port).** With SSH enabled on the pod
+  (add your public key as `PUBLIC_KEY` env var / use the pod's SSH command), forward the
+  port locally:
+  ```bash
+  ssh -N -L 8888:localhost:8888 root@<pod-ssh-host> -p <pod-ssh-port>
+  ```
+  then open `http://localhost:8888/lab?token=…` locally.
+
+Run it under `tmux`/`nohup` (or as a detached process) so the server survives shell
+disconnects. `EXPOSE 8888` is already declared in the image.
 
 ### Blender add-on paths
 
