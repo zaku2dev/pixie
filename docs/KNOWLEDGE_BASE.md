@@ -336,6 +336,48 @@ Inspect outputs in `nbs/pixie.ipynb` (synthetic) or `nbs/real_scene.ipynb` (real
 
 ---
 
+## 12. Troubleshooting a full `neural`-mode pipeline run
+
+Symptoms observed running `pipeline.py` (neural mode) end-to-end on a novel Objaverse
+object, with the fix for each. Several were baked into the `Dockerfile` / scripts — a
+container built from an older image needs the manual step until it's rebuilt + `git pull`ed.
+
+- **`TRAIN_F3RM_RERUN` → `AttributeError: module 'typeguard' has no attribute 'TypeCheckError'`**
+  (and a jaxtyping `check_type` bind error). Cause: vendored nerfstudio requires `tyro>=0.9.8`,
+  which silently upgrades tyro past the old `tyro==0.6.6` pin; tyro 0.9.x + jaxtyping need
+  `typeguard>=4`, but a stale `torchtyping` drags in `typeguard 2.x`.
+  Fix: `pip install "typeguard>=4.0.0,<5"`. Dockerfile now pins `tyro>=0.9.8` + `typeguard>=4`.
+- **`TRAIN_F3RM_RERUN` → `torchtyping` import fails under typeguard 4.** `f3rm/pca_colormap.py`
+  imported `torchtyping.TensorType` (decorative annotations only). Fix: replaced with plain
+  `torch.Tensor`; nothing else imports torchtyping, so it can be uninstalled.
+- **`TRAIN_GS` → `ModuleNotFoundError: No module named 'simple_knn'`** even though
+  `pip install ... simple-knn` reported success. Cause: `simple-knn/setup.py` declares no
+  `packages=` and ships only a placeholder `simple_knn/` dir, so an **editable** (`-e`) install
+  registers nothing importable. Fix: install it **non-editable** (Dockerfile updated; see §11).
+  Note: test these torch CUDA extensions with `import torch` *first* — otherwise you get a
+  spurious `libc10.so: cannot open shared object file` that is not a build problem.
+- **`NEURAL_INFERENCE` → `Normalization ranges file not found at {base_path}/normalization_stats/normalization_ranges.yaml`.**
+  The config resolves `normalization_stats_dir` under `paths.base_path` (e.g. `/workspace`),
+  but the canonical ranges are checked in at the repo root. Do **not** run `inspect_ranges.py`
+  for inference — it would recompute (wrong) ranges from your single object. Fix:
+  `scripts/download_models.py` now seeds `normalization_stats/` into `--local-dir`.
+- **`NEURAL_INFERENCE` → "Loaded 0 data files" / object skipped for missing `material_grid.npy`.**
+  `MaterialVoxelDataset` is the *benchmark* loader and hard-requires ground-truth
+  `sample_<id>/material_grid.npy`, which novel objects lack (VOXELIZE never writes it). GT is
+  used only for accuracy metrics / `_gt.npy`. Fix: `pixie/utils.py`'s
+  `_ensure_placeholder_material_grid` writes a placeholder before inference.
+- **`NEURAL_INFERENCE` → `AssertionError: Mask inconsistency ... clip_features_mask.npy doesn't match material_id-based mask`.**
+  With `enforce_mask_consistency=true` the loader asserts `(material_id != background_id) ==
+  clip_features_mask`. An all-background placeholder fails. Fix: derive the placeholder's
+  `material_id` from `clip_features_mask.npy` (foreground → a valid non-background id,
+  background → `background_id`) so the masks match exactly.
+- **On placeholder GT: ignore the accuracy / `_gt.npy` metrics** in the inference report for
+  novel objects — the GT is synthetic. The real output is `sample_<id>_pred.npy` feeding
+  map-to-coords → physics sim. If the foreground-voxel count is 0, voxelization produced an
+  empty occupancy grid — an upstream problem, not an inference one.
+
+---
+
 *Generated 2026-07-11 from a scan of this repo (branch `claude`) + arXiv:2508.17437.
 Line/config references reflect the code at generation time; re-verify against source if the
 repo has since changed.*
