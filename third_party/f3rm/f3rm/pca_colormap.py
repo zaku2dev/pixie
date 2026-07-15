@@ -1,16 +1,15 @@
 from typing import Optional
 
 import torch
-from torchtyping import TensorType
 
 
 def apply_pca_colormap_return_proj(
-    image: TensorType["bs":..., "d"],
-    proj_V: Optional[TensorType] = None,
-    low_rank_min: Optional[TensorType] = None,
-    low_rank_max: Optional[TensorType] = None,
+    image: torch.Tensor,
+    proj_V: Optional[torch.Tensor] = None,
+    low_rank_min: Optional[torch.Tensor] = None,
+    low_rank_max: Optional[torch.Tensor] = None,
     niter: int = 5,
-) -> TensorType["bs":..., "rgb":3]:
+) -> torch.Tensor:
     """Convert a multichannel image to color using PCA.
 
     Args:
@@ -44,10 +43,10 @@ def apply_pca_colormap_return_proj(
 
 
 def apply_pca_colormap(
-    image: TensorType["bs":..., "d"],
-    proj_V: Optional[TensorType] = None,
-    low_rank_min: Optional[TensorType] = None,
-    low_rank_max: Optional[TensorType] = None,
+    image: torch.Tensor,
+    proj_V: Optional[torch.Tensor] = None,
+    low_rank_min: Optional[torch.Tensor] = None,
+    low_rank_max: Optional[torch.Tensor] = None,
     niter: int = 5,
-) -> TensorType["bs":..., "rgb":3]:
+) -> torch.Tensor:
     return apply_pca_colormap_return_proj(image, proj_V, low_rank_min, low_rank_max, niter)[0]

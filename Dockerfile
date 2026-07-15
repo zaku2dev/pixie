@@ -121,8 +121,11 @@ RUN export TCNN_CUDA_ARCHITECTURES="$(echo "$TORCH_CUDA_ARCH_LIST" | tr -d '.')"
 # ---- MANUAL STEP 5 (git parts): PyTorch3D + pinned viewer/CLI deps ----------
 # --no-build-isolation: PyTorch3D imports torch in its setup.py, which an
 # isolated build env lacks — build it against the pixie env's torch instead.
+# tyro>=0.9.8 matches vendored nerfstudio's requirement (an older pin is silently
+# upgraded by its install anyway). tyro 0.9.x and jaxtyping need typeguard>=4;
+# a stale torchtyping keeps dragging in typeguard 2.x, so pin it forward here.
 RUN pip install -v --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git@stable" \
-    && pip install viser==0.2.7 tyro==0.6.6
+    && pip install viser==0.2.7 "tyro>=0.9.8" "typeguard>=4.0.0,<5"
 
 # ---- MANUAL STEP 7: FlashAttention (for Qwen2.5-VL) -------------------------
 # Install the official prebuilt wheel instead of compiling from source. flash-attn
