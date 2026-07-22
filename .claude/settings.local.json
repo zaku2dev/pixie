@@ -27,7 +27,11 @@
       "Bash(bash -n docker/build_and_push.sh)",
       "Bash(sh -n docker/git-askpass.sh)",
       "Bash(git -C /Users/zaku2dev/Projects/pixie status --short .claude/)",
-      "Bash(bash -n /Users/zaku2dev/Projects/pixie/docker/start_jupyter.sh)"
+      "Bash(bash -n /Users/zaku2dev/Projects/pixie/docker/start_jupyter.sh)",
+      "WebSearch",
+      "WebFetch(domain:docs.vast.ai)",
+      "WebFetch(domain:getdeploying.com)",
+      "WebFetch(domain:northflank.com)"
     ]
   }
 }
